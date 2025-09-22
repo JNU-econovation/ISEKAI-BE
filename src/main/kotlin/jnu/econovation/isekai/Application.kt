@@ -4,8 +4,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 
 @SpringBootApplication
-class IsekAiApplication
+class Application
 
 fun main(args: Array<String>) {
-    runApplication<IsekAiApplication>(*args)
+    runApplication<Application>(*args)
 }
