@@ -6,3 +6,4 @@ spring:
       - classpath:config/application-rtzr.yml
       - classpath:config/application-security.yml
       - classpath:config/application-dev-redis.yml
+      - classpath:config/application-dev-db.yml
