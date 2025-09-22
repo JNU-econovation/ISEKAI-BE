@@ -1,0 +1,4 @@
+security:
+  allowed-front-end-origins:
+    - http://localhost:*
+    - https://localhost:*
