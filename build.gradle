@@ -1,0 +1,81 @@
+plugins {
+    id 'java'
+    id 'org.jetbrains.kotlin.jvm' version '2.2.0'
+    id 'org.jetbrains.kotlin.plugin.spring' version '2.2.0'
+    id 'org.jetbrains.kotlin.plugin.jpa' version '2.2.0'
+    id 'org.jetbrains.kotlin.plugin.lombok' version '2.2.0'
+    id 'org.springframework.boot' version '3.5.4'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'jnu.econovation'
+version = '0.0.1-SNAPSHOT'
+description = 'isek-ai'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+
+dependencies {
+    //spring
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+
+    //kotlin reflection
+    implementation 'org.jetbrains.kotlin:kotlin-reflect'
+
+    //kotlin coroutine
+    implementation platform('org.jetbrains.kotlinx:kotlinx-coroutines-bom:1.10.2')
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-reactor'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-jdk8'
+
+    //test
+    testImplementation 'org.jetbrains.kotlin:kotlin-test-junit5'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    //lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+
+    //logging
+    implementation 'org.slf4j:slf4j-api:2.0.17'
+    implementation 'io.github.microutils:kotlin-logging:3.0.5'
+
+    //env
+    implementation 'me.paulschwarz:spring-dotenv:4.0.0'
+
+    //jackson
+    implementation 'com.fasterxml.jackson.module:jackson-module-jsonSchema'
+    implementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
+
+    //PostgreSQL
+    implementation 'org.postgresql:postgresql'
+
+    //Gemini
+    implementation 'com.google.genai:google-genai:1.15.0'
+}
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.addAll '-Xjsr305=strict'
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
