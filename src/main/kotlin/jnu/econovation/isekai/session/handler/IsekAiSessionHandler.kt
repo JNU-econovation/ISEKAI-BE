@@ -33,9 +33,9 @@ class IsekAiSessionHandler(
             onBufferOverflow = BufferOverflow.DROP_OLDEST
         )
 
-        sessionScope.launch {
+        val processingJob = sessionScope.launch {
             try {
-                service.processVoiceChunk(clientVoiceStream, sessionScope)
+                service.processVoiceChunk(clientVoiceStream)
             } catch (_: CancellationException) {
                 logger.info { "세션 ${session.id} 처리가 정상적으로 취소되었습니다." }
             } catch (e: Exception) {
@@ -45,6 +45,7 @@ class IsekAiSessionHandler(
 
         session.attributes["clientVoiceStream"] = clientVoiceStream
         session.attributes["sessionScope"] = sessionScope
+        session.attributes["processingJob"] = processingJob
     }
 
     override fun handleBinaryMessage(session: WebSocketSession, message: BinaryMessage) {
@@ -60,9 +61,9 @@ class IsekAiSessionHandler(
     }
 
     override fun afterConnectionClosed(session: WebSocketSession, status: CloseStatus) {
-        logger.info { "Client disconnected: ${session.id}" }
-
-        (session.attributes["sessionScope"] as? CoroutineScope)?.cancel()
+        logger.info { "Client disconnected: ${session.id}. Cancelling session scope." }
+        val sessionScope = session.attributes["sessionScope"] as? CoroutineScope
+        sessionScope?.cancel()
     }
 
 }

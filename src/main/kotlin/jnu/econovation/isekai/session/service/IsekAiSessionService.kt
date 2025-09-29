@@ -1,9 +1,7 @@
 package jnu.econovation.isekai.session.service
 
-import jnu.econovation.isekai.rtzr.service.RtzrSttService
-import kotlinx.coroutines.CoroutineScope
+import jnu.econovation.isekai.gemini.client.GeminiLiveClient
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.filter
 import mu.KotlinLogging
 import org.springframework.stereotype.Service
 
@@ -11,13 +9,12 @@ private val logger = KotlinLogging.logger {}
 
 @Service
 class IsekAiSessionService(
-    private val sttService: RtzrSttService
+    private val liveClient: GeminiLiveClient
 ) {
 
-    suspend fun processVoiceChunk(voiceStream: Flow<ByteArray>, scope: CoroutineScope) {
-        val result = sttService.stt(voiceStream, scope)
-            .filter { it.final }
-            .collect { result -> logger.info { "final chunk dto -> $result" } }
+    suspend fun processVoiceChunk(voiceStream: Flow<ByteArray>) {
+        liveClient.getLiveResponse(voiceStream)
+            ?.collect { response -> logger.info { "gemini response -> $response" } }
+            ?: logger.info { "gemini response -> null" }
     }
-
 }
