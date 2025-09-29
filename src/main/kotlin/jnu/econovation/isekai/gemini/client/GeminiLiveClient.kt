@@ -21,6 +21,7 @@ class GeminiLiveClient(
 
     private val liveConfig = LiveConnectConfig.builder()
         .responseModalities(Modality.Known.TEXT)
+        .inputAudioTranscription(AudioTranscriptionConfig.builder().build())
         .realtimeInputConfig(buildRealTimeInputConfig())
         .build()
 
@@ -88,7 +89,7 @@ class GeminiLiveClient(
 
     private fun buildAudioContent(voiceChunk: ByteArray): LiveSendRealtimeInputParameters {
         return LiveSendRealtimeInputParameters.builder()
-            .media(Blob.builder().mimeType("audio/pcm").data(voiceChunk))
+            .audio(Blob.builder().mimeType("audio/pcm").data(voiceChunk))
             .build()
     }
 
