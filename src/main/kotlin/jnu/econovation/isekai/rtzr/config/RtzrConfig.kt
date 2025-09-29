@@ -12,5 +12,7 @@ data class RtzrConfig(
     val encoding: String,
     val modelName: String,
     val domain : String,
-    val language : String
+    val language : String,
+    val useDisfluencyFilter : Boolean,
+    val useProfanityFilter : Boolean
 )

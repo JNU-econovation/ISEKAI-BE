@@ -1,25 +1,20 @@
 package jnu.econovation.isekai.gemini.client
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.genai.Client
-import com.google.genai.types.ContentEmbedding
-import com.google.genai.types.EmbedContentConfig
-import com.google.genai.types.LiveConnectConfig
-import com.google.genai.types.ProactivityConfig
+import com.google.genai.types.*
 import jnu.econovation.isekai.common.exception.server.InternalServerException
 import jnu.econovation.isekai.gemini.config.GeminiConfig
 import jnu.econovation.isekai.gemini.enums.GeminiModel
 import kotlinx.coroutines.future.await
 import org.springframework.stereotype.Component
 
+
 @Component
 class GeminiClient(
-    private val config: GeminiConfig
+    private val mapper: ObjectMapper,
+    config: GeminiConfig
 ) {
-    private val liveConfig = LiveConnectConfig.builder()
-        .responseModalities("AUDIO", "TEXT")
-        .proactivity(ProactivityConfig.builder().proactiveAudio(true))
-        .build()
-
     private val client = Client.builder().apiKey(config.apiKey).build()
 
     suspend fun getEmbedding(
@@ -34,21 +29,49 @@ class GeminiClient(
         val responseFuture = client.async.models.embedContent(model.toString(), text, config)
         val response = responseFuture.await()
         val embeddings = response.embeddings()
-        val extractedList: List<ContentEmbedding>? = embeddings.orElse(null)
 
-        if (extractedList == null || extractedList.isEmpty())
-            throw InternalServerException(IllegalStateException("Gemini 응답이 비었습니다."))
-
-        return extractedList
+        return embeddings.orElse(null)
+            ?: throw InternalServerException(IllegalStateException("Gemini 응답이 비었습니다."))
     }
 
-    suspend fun getLiveResponse(
-        model: GeminiModel = GeminiModel.GEMINI_2_5_FLASH_NATIVE_AUDIO_DIALOG
-    ) {
-        client.async.live.connect(
+    suspend fun getTextResponse(
+        prompt: String,
+        request: Any,
+        model: GeminiModel = GeminiModel.GEMINI_2_5_FLASH
+    ): String {
+        val systemInstruction = Content.fromParts(Part.fromText(prompt))
+        val requestJson = mapper.writeValueAsString(request)
+        val userContent = Content.fromParts(Part.fromText(requestJson))
+        val config = buildConfig(model, systemInstruction)
+        val responseFuture = client.async.models.generateContent(
             model.toString(),
-            liveConfig
+            userContent,
+            config
         )
+
+        val response = responseFuture.await().text()
+            ?: throw InternalServerException(IllegalStateException("Gemini 응답이 비었습니다."))
+
+        return response
+    }
+
+    private fun buildConfig(
+        model: GeminiModel,
+        systemInstruction: Content,
+        schema: Schema? = null,
+        thinkingBudget: Int = -1
+    ): GenerateContentConfig {
+
+        val building = GenerateContentConfig.builder()
+            .systemInstruction(systemInstruction)
+            .candidateCount(1)
+            .thinkingConfig(ThinkingConfig.builder().thinkingBudget(thinkingBudget).build())
+
+        if (schema != null)
+            building.responseJsonSchema(schema)
+                .responseMimeType("application/json")
+
+        return building.build()
     }
 
 }

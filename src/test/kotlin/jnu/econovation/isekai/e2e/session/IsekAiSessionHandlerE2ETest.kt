@@ -1,6 +1,7 @@
 package jnu.econovation.isekai.e2e.session
 
 import jnu.econovation.isekai.Application
+import jnu.econovation.isekai.gemini.config.GeminiConfig
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -23,7 +24,6 @@ import java.net.URI
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.collections.copyOf
-import kotlin.io.use
 
 private val logger = KotlinLogging.logger {}
 
@@ -36,7 +36,8 @@ private val logger = KotlinLogging.logger {}
 class KioskAiSessionHandlerE2ETest(
     @param:LocalServerPort
     private var port: Int,
-    private val resourceLoader: ResourceLoader
+    private val resourceLoader: ResourceLoader,
+    private val geminiConfig: GeminiConfig
 ) {
     private val client = StandardWebSocketClient()
     private val receivedMessages = ArrayBlockingQueue<ByteArray>(10)
@@ -70,28 +71,44 @@ class KioskAiSessionHandlerE2ETest(
         runBlocking {
             latch.await()
 
-            // https://www.aihub.or.kr/aihubdata/data/view.do?currMenu=115&topMenu=100&aihubDataSe=realm&dataSetSn=123
-            val resource = resourceLoader.getResource("classpath:test/sst-test.wav")
+            val resource = resourceLoader.getResource("classpath:test/e2e-test.wav")
+            val inputStream = resource.inputStream
+            val totalBytes = inputStream.available()
+            val halfwayPoint = totalBytes / 2
 
             val buffer = ByteArray(3200)
 
-            resource.inputStream.use { stream ->
-                while (true) {
-                    val bytesRead = stream.read(buffer)
-                    if (bytesRead <= 0) break
+            var bytesSent = 0
+            // 1. 파일의 절반까지만 전송
+            while (bytesSent < halfwayPoint) {
+                val bytesRead = inputStream.read(buffer)
+                if (bytesRead <= 0) break
 
-                    val chunkToSend =
-                        if (bytesRead < buffer.size) buffer.copyOf(bytesRead) else buffer
-                    session.sendMessage(BinaryMessage(chunkToSend))
-
-                    delay(100)
-                }
+                val chunkToSend = buffer.copyOf(bytesRead)
+                session.sendMessage(BinaryMessage(chunkToSend))
+                bytesSent += bytesRead
+                delay(100)
             }
-            delay(10000)
+
+            // 2. 의도적으로 침묵 (데이터 전송 중단)
+            val silenceMs = geminiConfig.silenceDurationMs.toLong() + 1000L
+            logger.info { "음성 스트리밍 중간 지점 도달, ${silenceMs / 1000}초간 침묵 시작" }
+            delay(silenceMs)
+            logger.info { "${silenceMs / 1000}초 침묵 종료, 나머지 스트리밍 재개" }
+
+            // 3. 나머지 파일 전송
+            while (true) {
+                val bytesRead = inputStream.read(buffer)
+                if (bytesRead <= 0) break
+                val chunkToSend = buffer.copyOf(bytesRead)
+                session.sendMessage(BinaryMessage(chunkToSend))
+                delay(100)
+            }
+
             logger.info { "음성 스트리밍 끝!" }
+            delay(5000) // Gemini의 추가 응답을 기다리는 시간
             session.close()
         }
-
         logger.info { "stt 끝" }
     }
 }
