@@ -23,7 +23,6 @@ import org.springframework.web.socket.handler.BinaryWebSocketHandler
 import java.net.URI
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
-import kotlin.collections.copyOf
 
 private val logger = KotlinLogging.logger {}
 
@@ -52,21 +51,7 @@ class KioskAiSessionHandlerE2ETest(
     fun e2e() {
         val latch = CompletableDeferred<Unit>()
         val headers = WebSocketHttpHeaders()
-        val session = client.execute(object : BinaryWebSocketHandler() {
-            override fun afterConnectionEstablished(session: WebSocketSession) {
-                latch.complete(Unit)
-            }
-
-            override fun handleBinaryMessage(
-                session: WebSocketSession,
-                message: BinaryMessage
-            ) {
-                val bytes = ByteArray(message.payload.remaining())
-                message.payload.get(bytes)
-                receivedMessages.offer(bytes)
-            }
-        }, headers, URI("ws://localhost:${port}/websocket/voice"))
-            .get(3, TimeUnit.SECONDS)
+        val session = getSession(latch, headers)
 
         runBlocking {
             latch.await()
@@ -75,7 +60,6 @@ class KioskAiSessionHandlerE2ETest(
             val inputStream = resource.inputStream
             val totalBytes = inputStream.available()
             val halfwayPoint = totalBytes / 2
-
             val buffer = ByteArray(3200)
 
             var bytesSent = 0
@@ -90,25 +74,69 @@ class KioskAiSessionHandlerE2ETest(
                 delay(100)
             }
 
-            // 2. 의도적으로 침묵 (데이터 전송 중단)
+            // 2. 중간 침묵
             val silenceMs = geminiConfig.silenceDurationMs.toLong() + 1000L
-            logger.info { "음성 스트리밍 중간 지점 도달, ${silenceMs / 1000}초간 침묵 시작" }
-            delay(silenceMs)
-            logger.info { "${silenceMs / 1000}초 침묵 종료, 나머지 스트리밍 재개" }
+            val silentChunk = ByteArray(buffer.size)
+            val silenceIterations = silenceMs / 100
+
+            logger.info { "음성 스트리밍 중간 지점 도달" }
+            sendSilence(silenceIterations, session, silentChunk, silenceMs)
+
 
             // 3. 나머지 파일 전송
             while (true) {
                 val bytesRead = inputStream.read(buffer)
                 if (bytesRead <= 0) break
+
                 val chunkToSend = buffer.copyOf(bytesRead)
                 session.sendMessage(BinaryMessage(chunkToSend))
                 delay(100)
             }
 
+            // 4. 끝 침묵
+            logger.info { "음성 스트리밍 끝 지점 도달" }
+            sendSilence(silenceIterations, session, silentChunk, silenceMs)
+
+            // 5. 마무리
             logger.info { "음성 스트리밍 끝!" }
-            delay(5000) // Gemini의 추가 응답을 기다리는 시간
+            delay(5000)
             session.close()
         }
-        logger.info { "stt 끝" }
+        logger.info { "음성 스트리밍 e2e 끝" }
+    }
+
+    private fun getSession(
+        latch: CompletableDeferred<Unit>,
+        headers: WebSocketHttpHeaders
+    ): WebSocketSession = client.execute(object : BinaryWebSocketHandler() {
+        override fun afterConnectionEstablished(session: WebSocketSession) {
+            latch.complete(Unit)
+        }
+
+        override fun handleBinaryMessage(
+            session: WebSocketSession,
+            message: BinaryMessage
+        ) {
+            val bytes = ByteArray(message.payload.remaining())
+            message.payload.get(bytes)
+            receivedMessages.offer(bytes)
+        }
+    }, headers, URI("ws://localhost:${port}/websocket/voice"))
+        .get(3, TimeUnit.SECONDS)
+
+    private suspend fun sendSilence(
+        silenceIterations: Long,
+        session: WebSocketSession,
+        silentChunk: ByteArray,
+        silenceMs: Long
+    ) {
+        logger.info { "${silenceMs / 1000}초간 침묵 스트림 전송 시작" }
+
+        repeat(silenceIterations.toInt()) {
+            session.sendMessage(BinaryMessage(silentChunk))
+            delay(100)
+        }
+
+        logger.info { "${silenceMs / 1000}초 침묵 스트림 전송 종료" }
     }
 }
