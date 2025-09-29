@@ -35,7 +35,7 @@ class IsekAiSessionHandler(
 
         val processingJob = sessionScope.launch {
             try {
-                service.processVoiceChunk(clientVoiceStream, sessionScope)
+                service.processVoiceChunk(clientVoiceStream)
             } catch (_: CancellationException) {
                 logger.info { "세션 ${session.id} 처리가 정상적으로 취소되었습니다." }
             } catch (e: Exception) {
