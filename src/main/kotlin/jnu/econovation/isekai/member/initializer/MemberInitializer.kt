@@ -1,0 +1,24 @@
+package jnu.econovation.isekai.member.initializer
+
+import jnu.econovation.isekai.member.constant.MemberConstants.MASTER_EMAIL
+import jnu.econovation.isekai.member.constant.MemberConstants.MASTER_MEMBER
+import jnu.econovation.isekai.member.service.MemberService
+import mu.KotlinLogging
+import org.springframework.boot.context.event.ApplicationReadyEvent
+import org.springframework.context.event.EventListener
+import org.springframework.stereotype.Component
+
+@Component
+class MemberInitializer(private val service: MemberService) {
+    private val logger = KotlinLogging.logger {}
+
+    @EventListener(ApplicationReadyEvent::class)
+    fun init() {
+        service.findByEmail(MASTER_EMAIL)
+            ?.let { logger.info { "Master Member가 이미 DB에 존재함" } }
+            ?: run {
+                service.save(MASTER_MEMBER)
+                logger.info { "Master Member 저장 완료 -> $MASTER_MEMBER" }
+            }
+    }
+}

@@ -1,6 +1,6 @@
-package jnu.econovation.isekai.gemini.repository
+package jnu.econovation.isekai.chat.repository
 
-import jnu.econovation.isekai.gemini.entity.LongTermMemory
+import jnu.econovation.isekai.chat.model.entity.LongTermMemory
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.stereotype.Repository
