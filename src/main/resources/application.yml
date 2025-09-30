@@ -1,5 +1,6 @@
 spring:
-  application.name: capstone
+  application:
+    name: isek-ai
   profiles.default: dev
   config:
     import:
@@ -7,3 +8,4 @@ spring:
       - classpath:config/application-dev-redis.yml
       - classpath:config/application-dev-db.yml
       - classpath:config/application-gemini.yml
+      - classpath:config/application-prompt.yml
