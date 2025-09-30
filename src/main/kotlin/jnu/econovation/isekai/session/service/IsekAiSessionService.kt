@@ -14,7 +14,8 @@ class IsekAiSessionService(
 
     suspend fun processVoiceChunk(voiceStream: Flow<ByteArray>) {
         liveClient.getLiveResponse(voiceStream)
-            ?.collect { response -> logger.info { "gemini response -> $response" } }
-            ?: logger.info { "gemini response -> null" }
+            ?.collect {
+                response -> logger.info { "gemini response -> $response" }
+            }
     }
 }
