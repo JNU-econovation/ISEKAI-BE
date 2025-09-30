@@ -46,7 +46,7 @@ class GeminiLiveClient(
                 val inputSTTBuffer = StringBuilder()
                 val outputBuffer = StringBuilder()
 
-                session.receive { message -> onMessageReceived(message, inputSTTBuffer, outputBuffer) }
+                session.receive { onMessageReceived(message = it, inputSTTBuffer, outputBuffer) }
                 launch { send(inputVoice, session) }
                 awaitClose { onClosed(session) }
             }
@@ -63,18 +63,14 @@ class GeminiLiveClient(
         logger.debug { "gemini received -> $message" }
 
         message.serverContent().flatMap { it.inputTranscription() }
-            .ifPresent { inputTranscription ->
-                inputTranscription.text()
-                    .ifPresent { text -> inputSTTBuffer.append(text) }
+            .ifPresent {
+                it.text().ifPresent { inputSTTChunk -> inputSTTBuffer.append(inputSTTChunk) }
             }
 
-        message.serverContent()
-            .flatMap { it.modelTurn() }
-            .flatMap { it.parts() }
+        message.serverContent().flatMap { it.modelTurn() }.flatMap { it.parts() }
             .ifPresent { parts ->
-                parts.forEach { part ->
-                    part.text()
-                        .ifPresent { text -> outputBuffer.append(text) }
+                parts.forEach {
+                    it.text().ifPresent { outputChunk -> outputBuffer.append(outputChunk) }
                 }
             }
 
@@ -84,9 +80,8 @@ class GeminiLiveClient(
 
             logger.debug { "서버가 대답을 완료했습니다. STT: [$finalInput], Response: [$finalOutput]" }
 
-            if (finalInput.isNotEmpty() || finalOutput.isNotEmpty()) {
+            if (finalInput.isNotEmpty() || finalOutput.isNotEmpty())
                 trySend(GeminiLiveResponse(finalInput, finalOutput))
-            }
 
             inputSTTBuffer.clear()
             outputBuffer.clear()

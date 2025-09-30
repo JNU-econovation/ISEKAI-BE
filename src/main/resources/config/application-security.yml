@@ -2,3 +2,5 @@ security:
   allowed-front-end-origins:
     - http://localhost:*
     - https://localhost:*
+
+aes256.key: ${AES256_KEY}

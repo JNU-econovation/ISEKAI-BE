@@ -1,30 +1,36 @@
-package jnu.econovation.isekai.gemini.entity;
+package jnu.econovation.isekai.chat.model.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jnu.econovation.isekai.common.entity.BaseEntity;
+import jnu.econovation.isekai.chat.model.vo.Speaker;
+import jnu.econovation.isekai.member.entity.Member;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Array;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class ShortTermMemory extends BaseEntity {
+public class Chat extends BaseEntity {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "host_member_id", nullable = false)
+    private Member hostMember;
+
     @Enumerated(EnumType.STRING)
     private Speaker speaker;
 
@@ -32,8 +38,10 @@ public class ShortTermMemory extends BaseEntity {
     private String content;
 
     @Builder
-    ShortTermMemory(Speaker speaker, String content) {
+    Chat(Member hostMember, Speaker speaker, String content) {
+        this.hostMember = hostMember;
         this.speaker = speaker;
         this.content = content;
     }
+
 }

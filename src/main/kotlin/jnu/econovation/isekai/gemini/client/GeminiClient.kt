@@ -37,12 +37,13 @@ class GeminiClient(
     suspend fun getTextResponse(
         prompt: String,
         request: Any,
-        model: GeminiModel = GeminiModel.GEMINI_2_5_FLASH
+        model: GeminiModel = GeminiModel.GEMINI_2_5_FLASH,
+        schema: Schema? = null
     ): String {
         val systemInstruction = Content.fromParts(Part.fromText(prompt))
-        val requestJson = mapper.writeValueAsString(request)
-        val userContent = Content.fromParts(Part.fromText(requestJson))
-        val config = buildConfig(model, systemInstruction)
+        val finalRequest = request as? String ?: mapper.writeValueAsString(request)
+        val userContent = Content.fromParts(Part.fromText(finalRequest))
+        val config = buildConfig(systemInstruction, schema)
         val responseFuture = client.async.models.generateContent(
             model.toString(),
             userContent,
@@ -56,7 +57,6 @@ class GeminiClient(
     }
 
     private fun buildConfig(
-        model: GeminiModel,
         systemInstruction: Content,
         schema: Schema? = null,
         thinkingBudget: Int = -1

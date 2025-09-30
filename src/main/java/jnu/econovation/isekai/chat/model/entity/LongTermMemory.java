@@ -1,11 +1,15 @@
-package jnu.econovation.isekai.gemini.entity;
+package jnu.econovation.isekai.chat.model.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jnu.econovation.isekai.common.entity.BaseEntity;
+import jnu.econovation.isekai.member.entity.Member;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -22,17 +26,22 @@ public class LongTermMemory extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "host_member_id", nullable = false)
+    private Member hostMember;
+
     @Column(nullable = false, columnDefinition = "TEXT")
-    private String content;
+    private String summary;
 
     @Column(nullable = false)
     @Array(length = 768)
     @JdbcTypeCode(SqlTypes.VECTOR)
-    private Float[] embedding;
+    private float[] embedding;
 
     @Builder
-    LongTermMemory(String content, Float[] embedding) {
-        this.content = content;
+    LongTermMemory(String summary, Member hostMember, float[] embedding) {
+        this.summary = summary;
+        this.hostMember = hostMember;
         this.embedding = embedding;
     }
 }
