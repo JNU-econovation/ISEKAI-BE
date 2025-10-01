@@ -6,12 +6,16 @@ import jnu.econovation.isekai.member.service.MemberService
 import mu.KotlinLogging
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
+import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
+import org.springframework.transaction.annotation.Transactional
 
+@Order(1)
 @Component
 class MemberInitializer(private val service: MemberService) {
     private val logger = KotlinLogging.logger {}
 
+    @Transactional
     @EventListener(ApplicationReadyEvent::class)
     fun init() {
         service.findByEmail(MASTER_EMAIL)
