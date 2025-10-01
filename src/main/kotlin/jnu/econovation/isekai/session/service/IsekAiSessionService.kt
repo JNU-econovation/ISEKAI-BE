@@ -19,23 +19,23 @@ class IsekAiSessionService(
     private val liveClient: GeminiLiveClient,
     private val chatMemoryService: ChatMemoryService
 ) {
-
     private val independentScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     suspend fun processVoiceChunk(voiceStream: Flow<ByteArray>) {
         liveClient.getLiveResponse(voiceStream)
-            ?.collect { response ->
-                logger.info { "gemini response -> $response" }
-                val input = response.inputSTT
-                val output = response.output
-                independentScope.launch {
-                    try {
-                        //todo: 추후 MASTER MEMBER -> 사용자화
-                        chatMemoryService.save(MASTER_MEMBER, ChatDTO(input, output))
-                    } catch (e: Exception) {
-                        logger.error(e) { "채팅 저장 중 예외 발생" }
-                    }
-                }
+            ?.collect {
+                logger.info { "gemini response -> $it" }
+                independentScope.launch { saveChat(it.inputSTT, it.output) }
+
             }
+    }
+
+    private suspend fun saveChat(input: String, output: String) {
+        try {
+            //todo: 추후 MASTER MEMBER -> 사용자화
+            chatMemoryService.save(MASTER_MEMBER, ChatDTO(input, output))
+        } catch (e: Exception) {
+            logger.error(e) { "채팅 저장 중 예외 발생" }
+        }
     }
 }
