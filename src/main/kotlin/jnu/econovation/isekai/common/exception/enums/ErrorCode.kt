@@ -17,8 +17,9 @@ enum class ErrorCode(
         2,
         "페이징 가능한 필드가 아닙니다. -> %s = %s"
     ),
-    BAD_DATA_MEANING(Domain.COMMON, HttpStatus.UNPROCESSABLE_ENTITY, 1, "%s");
+    BAD_DATA_MEANING(Domain.COMMON, HttpStatus.UNPROCESSABLE_ENTITY, 1, "%s"),
 
+    NO_SUCH_PROMPT(Domain.PROMPT, HttpStatus.NOT_FOUND, 1, "존재하지 않는 프롬프트입니다.");
 
     fun getCode() = "${domain.name}_${status.value()}_%03d".format(number)
 }
