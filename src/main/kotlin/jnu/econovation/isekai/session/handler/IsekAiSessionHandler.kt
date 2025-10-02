@@ -1,13 +1,10 @@
 package jnu.econovation.isekai.session.handler
 
+import jnu.econovation.isekai.common.exception.server.InternalServerException
 import jnu.econovation.isekai.session.service.IsekAiSessionService
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
 import org.springframework.web.socket.BinaryMessage
@@ -35,7 +32,10 @@ class IsekAiSessionHandler(
 
         val processingJob = sessionScope.launch {
             try {
-                service.processVoiceChunk(clientVoiceStream)
+                val personaId = session.attributes["personaId"] as? Long
+                    ?: throw InternalServerException(IllegalStateException("personaId is null"))
+
+                service.processVoiceChunk(clientVoiceStream, personaId)
             } catch (_: CancellationException) {
                 logger.info { "세션 ${session.id} 처리가 정상적으로 취소되었습니다." }
             } catch (e: Exception) {

@@ -1,5 +1,6 @@
 package jnu.econovation.isekai.member.service
 
+import jnu.econovation.isekai.member.dto.internal.MemberInfoDTO
 import jnu.econovation.isekai.member.entity.Member
 import jnu.econovation.isekai.member.repository.MemberRepository
 import jnu.econovation.isekai.member.vo.Email
@@ -15,6 +16,13 @@ class MemberService(
     fun save(member: Member) = repository.save(member)
 
     @Transactional(readOnly = true)
-    fun findByEmail(email: Email) = repository.findByEmail(email)
+    fun findByEmail(email: Email) : MemberInfoDTO? {
+        return findByEmailEntity(email)?.let { MemberInfoDTO.from(it) }
+    }
+
+    @Transactional(readOnly = true)
+    fun findByEmailEntity(email: Email) : Member? {
+        return repository.findByEmail(email)
+    }
 
 }
