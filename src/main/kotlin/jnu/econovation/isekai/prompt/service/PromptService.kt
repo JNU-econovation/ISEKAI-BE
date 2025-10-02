@@ -1,8 +1,12 @@
 package jnu.econovation.isekai.prompt.service
 
+import jnu.econovation.isekai.member.constant.MemberConstants.MASTER_EMAIL
 import jnu.econovation.isekai.member.service.MemberService
 import jnu.econovation.isekai.prompt.dto.internal.PromptDTO
+import jnu.econovation.isekai.prompt.dto.internal.PromptRequest
 import jnu.econovation.isekai.prompt.dto.response.PromptResponse
+import jnu.econovation.isekai.prompt.dto.response.PromptsPageResponse
+import jnu.econovation.isekai.prompt.exception.NoSuchPromptException
 import jnu.econovation.isekai.prompt.model.entity.Prompt
 import jnu.econovation.isekai.prompt.model.vo.Content
 import jnu.econovation.isekai.prompt.model.vo.PersonaName
@@ -20,21 +24,45 @@ class PromptService(
 ) {
 
     @Transactional
-    fun save(promptDTO: PromptDTO) {
-        val memberEntity = memberService.findByEmailEntity(promptDTO.author.email)
+    fun save(request: PromptRequest): Long {
+        val memberEntity = memberService.findByEmailEntity(MASTER_EMAIL)
 
         val promptEntity = Prompt.builder()
             .author(memberEntity)
-            .personaName(PersonaName(promptDTO.personaName))
-            .content(Content(promptDTO.content))
-            .isPublic(promptDTO.isPublic)
+            .personaName(PersonaName(request.personaName))
+            .content(Content(request.content))
+            .isPublic(request.isPublic)
             .build()
 
-        repository.save(promptEntity)
+        return repository.save(promptEntity).id
     }
 
     @Transactional(readOnly = true)
-    fun get(pageable: Pageable): Page<PromptResponse> {
-        return repository.findAll(pageable).map { PromptResponse.from(it) }
+    fun get(pageable: Pageable): Page<PromptsPageResponse> {
+        return repository.findAll(pageable).map { PromptsPageResponse.from(it) }
+    }
+
+    @Transactional(readOnly = true)
+    fun get(id: Long): PromptDTO {
+        return repository.findById(id)
+            .map { PromptDTO.from(it) }
+            .orElseThrow { NoSuchPromptException() }
+    }
+
+    @Transactional(readOnly = true)
+    fun getForResponse(id: Long): PromptResponse {
+        return get(id).toResponseDTO()
+    }
+
+    @Transactional
+    fun update(id: Long, request: PromptRequest) {
+        val promptEntity = repository.findById(id)
+            .orElseThrow { NoSuchPromptException() }
+
+        promptEntity.update(
+            PersonaName(request.personaName),
+            Content(request.content),
+            request.isPublic
+        )
     }
 }

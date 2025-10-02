@@ -32,7 +32,7 @@ public class Prompt extends BaseEntity {
     @AttributeOverride(name = "value", column = @Column(name = "persona_name", nullable = false))
     private PersonaName personaName;
 
-    @AttributeOverride(name = "value", column = @Column(name = "content", nullable = false))
+    @AttributeOverride(name = "value", column = @Column(name = "content", nullable = false, columnDefinition = "TEXT"))
     private Content content;
 
     @Column(nullable = false)
@@ -41,6 +41,12 @@ public class Prompt extends BaseEntity {
     @Builder
     Prompt(Member author, PersonaName personaName, Content content, boolean isPublic) {
         this.author = author;
+        this.personaName = personaName;
+        this.content = content;
+        this.isPublic = isPublic;
+    }
+
+    public void update(PersonaName personaName, Content content, boolean isPublic) {
         this.personaName = personaName;
         this.content = content;
         this.isPublic = isPublic;

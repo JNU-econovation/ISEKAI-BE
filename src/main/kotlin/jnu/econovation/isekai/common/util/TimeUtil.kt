@@ -19,4 +19,9 @@ object TimeUtil {
     fun formatToSimpleString(dateTime: ZonedDateTime): String {
         return dateTime.format(SIMPLE_DATE_FORMATTER)
     }
+
+    fun formatToSimpleString(instant: Instant): String {
+        val zonedDateTime = convertInstantToZonedDateTime(instant)
+        return formatToSimpleString(zonedDateTime)
+    }
 }
