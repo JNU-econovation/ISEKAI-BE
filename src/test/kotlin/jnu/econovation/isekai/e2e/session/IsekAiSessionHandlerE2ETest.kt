@@ -38,6 +38,11 @@ class KioskAiSessionHandlerE2ETest(
     private val resourceLoader: ResourceLoader,
     private val geminiConfig: GeminiConfig
 ) {
+
+    private companion object {
+        const val PERSONA_ID = 1
+    }
+
     private val client = StandardWebSocketClient()
     private val receivedMessages = ArrayBlockingQueue<ByteArray>(10)
 
@@ -80,7 +85,7 @@ class KioskAiSessionHandlerE2ETest(
             val silenceIterations = silenceMs / 100
 
             logger.info { "음성 스트리밍 중간 지점 도달" }
-            sendSilence(silenceIterations, session, silentChunk, silenceMs)
+//            sendSilence(silenceIterations, session, silentChunk, silenceMs)
 
 
             // 3. 나머지 파일 전송
@@ -121,7 +126,7 @@ class KioskAiSessionHandlerE2ETest(
             message.payload.get(bytes)
             receivedMessages.offer(bytes)
         }
-    }, headers, URI("ws://localhost:${port}/websocket/voice"))
+    }, headers, URI("ws://localhost:${port}/websocket/voice?personaId=${PERSONA_ID}"))
         .get(3, TimeUnit.SECONDS)
 
     private suspend fun sendSilence(

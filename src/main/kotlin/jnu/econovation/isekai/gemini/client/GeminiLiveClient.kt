@@ -23,22 +23,17 @@ class GeminiLiveClient(
 
     private val logger = KotlinLogging.logger {}
 
-    private val liveConfig = LiveConnectConfig.builder()
-        .responseModalities(Modality.Known.TEXT)
-        .inputAudioTranscription(AudioTranscriptionConfig.builder().build())
-        .realtimeInputConfig(buildRealTimeInputConfig())
-        .build()
-
     private val client = Client.builder().apiKey(config.apiKey).build()
 
     suspend fun getLiveResponse(
         inputVoice: Flow<ByteArray>,
+        prompt: String,
         model: GeminiModel = GeminiModel.GEMINI_2_5_FLASH_LIVE
     ): Flow<GeminiLiveResponse>? {
         return try {
             callbackFlow {
                 val session = client.async.live
-                    .connect(model.toString(), liveConfig)
+                    .connect(model.toString(), buildLiveConfig(prompt))
                     .await()
 
                 logger.debug { "Gemini Live 세션이 연결되었습니다." }
@@ -53,6 +48,15 @@ class GeminiLiveClient(
         } catch (e: Exception) {
             throw InternalServerException(e)
         }
+    }
+
+    private fun buildLiveConfig(prompt: String): LiveConnectConfig {
+        return LiveConnectConfig.builder()
+            .responseModalities(Modality.Known.TEXT)
+            .inputAudioTranscription(AudioTranscriptionConfig.builder().build())
+            .realtimeInputConfig(buildRealTimeInputConfig())
+            .systemInstruction(Content.fromParts(Part.fromText(prompt)))
+            .build()
     }
 
     private fun ProducerScope<GeminiLiveResponse>.onMessageReceived(
