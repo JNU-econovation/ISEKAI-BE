@@ -19,6 +19,8 @@ import jnu.econovation.isekai.gemini.client.GeminiClient
 import jnu.econovation.isekai.gemini.enums.GeminiModel
 import jnu.econovation.isekai.member.entity.Member
 import jnu.econovation.isekai.persona.config.PromptConfig
+import jnu.econovation.isekai.persona.model.entity.Persona
+import mu.KotlinLogging
 import org.springframework.data.redis.connection.RedisConnectionFactory
 import org.springframework.data.redis.support.atomic.RedisAtomicInteger
 import org.springframework.retry.annotation.Backoff
@@ -36,8 +38,17 @@ class ChatMemoryService(
     private val mapper: ObjectMapper
 ) {
 
-    companion object {
-        private val GEMINI_SUMMARY_SCHEMA = Schema.builder()
+    private companion object {
+        val LOGGER = KotlinLogging.logger {}
+
+        val CONSOLIDATION_PLANS = ConsolidationPlans(
+            embeddingPlanA = GeminiModel.GEMINI_EMBEDDING_001,
+            embeddingPlanB = GeminiModel.TEXT_EMBEDDING_004,
+            summarizePlanA = GeminiModel.GEMINI_2_5_FLASH,
+            summarizePlanB = GeminiModel.GEMINI_2_5_PRO
+        )
+
+        val GEMINI_SUMMARY_SCHEMA: Schema = Schema.builder()
             .type(Type.Known.OBJECT)
             .properties(
                 ImmutableMap.of(
@@ -54,15 +65,17 @@ class ChatMemoryService(
     }
 
     @Transactional
-    suspend fun save(member: Member, chatDTO: ChatDTO) {
+    suspend fun save(hostMember: Member, persona: Persona, chatDTO: ChatDTO) {
         val inputChat = Chat.builder()
-            .hostMember(member)
+            .hostMember(hostMember)
+            .persona(persona)
             .speaker(Speaker.USER)
             .content(chatDTO.input)
             .build()
 
         val outputChat = Chat.builder()
-            .hostMember(member)
+            .hostMember(hostMember)
+            .persona(persona)
             .speaker(Speaker.BOT)
             .content(chatDTO.output)
             .build()
@@ -70,41 +83,55 @@ class ChatMemoryService(
         chatService.save(inputChat)
         chatService.save(outputChat)
 
-        val counter = RedisAtomicInteger("${member.id}:chatCounter", connectionFactory)
+        val counter = RedisAtomicInteger("${hostMember.id}:chatCounter", connectionFactory)
         val count = counter.incrementAndGet()
 
         if (count >= CONSOLIDATION_COUNT) {
-            consolidate(member, counter)
+            consolidate(hostMember, counter, CONSOLIDATION_PLANS)
         }
     }
 
-    private suspend fun consolidate(
-        member: Member,
-        counter: RedisAtomicInteger
-    ) {
-        val recentChatString = chatService
-            .getRecentChats(member, LONG_TERM_MEMORY_COUNT)
-            .map { ChatHistoryDTO.from(it) }
-            .joinToString("\n\n") { it.toString() }
-
-        val summaryText = geminiClient.getTextResponse(
-            prompt = promptConfig.summarize,
-            request = recentChatString,
-            schema = GEMINI_SUMMARY_SCHEMA
+    @Transactional(readOnly = true)
+    fun getMemory(persona: Persona, hostMember: Member) {
+/*
+        val (_, shortTermMemory) = getShortTermMemory(persona, hostMember)
+        val longTermMemory = longTermMemoryService.findSimilarMemories(
+            embedVector(
+                shortTermMemory,
+                GeminiModel.GEMINI_EMBEDDING_001
+            ), 10
         )
+*/
+    }
 
-        val summarizeDTO = mapper.readValue(summaryText, SummarizeDTO::class.java)
+    private suspend fun consolidate(
+        hostMember: Member,
+        counter: RedisAtomicInteger,
+        plans: ConsolidationPlans
+    ) {
+        val (recentChat, shortTermMemory) = getShortTermMemory(hostMember)
+        val startTime = recentChat.first().chattedAt
+        val endTime = recentChat.last().chattedAt
+        val summaryPrefix = "[${startTime} ~ ${endTime}]"
+
+        val summarizeDTO = try {
+            summarize(shortTermMemory, plans.summarizePlanA)
+        } catch (_: ServerException) {
+            LOGGER.warn("Retry exhausted로 인한 summarizer 교체 : ${plans.summarizePlanA} -> ${plans.summarizePlanB}")
+            summarize(shortTermMemory, plans.summarizePlanB)
+        }
 
         val vectorEmbeddings = try {
-            embedVector(summarizeDTO.summary, GeminiModel.GEMINI_EMBEDDING_001)
+            embedVector(summaryPrefix + summarizeDTO.summary, plans.embeddingPlanA)
         } catch (_: ServerException) {
-            embedVector(summarizeDTO.summary, GeminiModel.TEXT_EMBEDDING_004)
+            LOGGER.warn { "Retry exhausted로 인한 임베딩 교체 : ${plans.embeddingPlanA} -> ${plans.embeddingPlanB}" }
+            embedVector(summaryPrefix + summarizeDTO.summary, plans.embeddingPlanB)
         }
 
         longTermMemoryService.save(
             LongTermMemory.builder()
                 .summary(summarizeDTO.summary)
-                .hostMember(member)
+                .hostMember(hostMember)
                 .embedding(vectorEmbeddings)
                 .build()
         )
@@ -112,16 +139,39 @@ class ChatMemoryService(
         counter.set(0)
     }
 
+    private fun getShortTermMemory(
+        persona: Persona,
+        hostMember: Member
+    ): Pair<List<ChatHistoryDTO>, String> {
+        val recentChat = chatService
+            .getRecentChats(persona, hostMember, LONG_TERM_MEMORY_COUNT)
+            .map { ChatHistoryDTO.from(it) }
+
+        val shortTermMemory = recentChat.joinToString("\n\n") { it.content }
+        return Pair(recentChat, shortTermMemory)
+    }
+
+    private suspend fun summarize(shortTermMemory: String, model: GeminiModel): SummarizeDTO {
+        val response = getSummaryResponse(shortTermMemory, model)
+
+        return mapper.readValue(response, SummarizeDTO::class.java)
+    }
+
+    //TODO: Exponential Backoff
     @Retryable(
         value = [ServerException::class],
         maxAttempts = 4,
         backoff = Backoff(delay = 3000)
     )
-    private suspend fun summarize(recentChatString: String): String {
+    private suspend fun getSummaryResponse(
+        recentChatString: String,
+        model: GeminiModel
+    ): String {
         return geminiClient.getTextResponse(
             prompt = promptConfig.summarize,
             request = recentChatString,
-            schema = GEMINI_SUMMARY_SCHEMA
+            schema = GEMINI_SUMMARY_SCHEMA,
+            model = model
         )
     }
 
@@ -134,3 +184,10 @@ class ChatMemoryService(
         geminiClient.getEmbedding(text, model).first().values().get().toFloatArray()
 
 }
+
+private data class ConsolidationPlans(
+    val summarizePlanA: GeminiModel,
+    val summarizePlanB: GeminiModel,
+    val embeddingPlanA: GeminiModel,
+    val embeddingPlanB: GeminiModel
+)
