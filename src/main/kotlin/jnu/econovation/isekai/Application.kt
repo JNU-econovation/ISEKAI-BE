@@ -2,7 +2,7 @@ package jnu.econovation.isekai
 
 import jnu.econovation.isekai.common.security.config.AllowedOriginsProperties
 import jnu.econovation.isekai.gemini.config.GeminiConfig
-import jnu.econovation.isekai.prompt.config.PromptConfig
+import jnu.econovation.isekai.persona.config.PromptConfig
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication

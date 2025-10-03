@@ -1,6 +1,6 @@
-package jnu.econovation.isekai.prompt.dto.response
+package jnu.econovation.isekai.persona.dto.response
 
-data class PromptResponse(
+data class PersonaResponse(
     val id: Long,
     val author: String,
     val personaName: String,

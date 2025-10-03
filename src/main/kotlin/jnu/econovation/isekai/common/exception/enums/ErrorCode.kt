@@ -19,7 +19,7 @@ enum class ErrorCode(
     ),
     BAD_DATA_MEANING(Domain.COMMON, HttpStatus.UNPROCESSABLE_ENTITY, 1, "%s"),
 
-    NO_SUCH_PROMPT(Domain.PROMPT, HttpStatus.NOT_FOUND, 1, "존재하지 않는 프롬프트입니다.");
+    NO_SUCH_PROMPT(Domain.PERSONA, HttpStatus.NOT_FOUND, 1, "존재하지 않는 프롬프트입니다.");
 
     fun getCode() = "${domain.name}_${status.value()}_%03d".format(number)
 }

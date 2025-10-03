@@ -1,4 +1,4 @@
-package jnu.econovation.isekai.prompt.model.entity;
+package jnu.econovation.isekai.persona.model.entity;
 
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
@@ -10,8 +10,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
 import jnu.econovation.isekai.common.entity.BaseEntity;
 import jnu.econovation.isekai.member.entity.Member;
-import jnu.econovation.isekai.prompt.model.vo.Content;
-import jnu.econovation.isekai.prompt.model.vo.PersonaName;
+import jnu.econovation.isekai.persona.model.vo.Content;
+import jnu.econovation.isekai.persona.model.vo.PersonaName;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -20,7 +20,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Prompt extends BaseEntity {
+public class Persona extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -30,7 +30,7 @@ public class Prompt extends BaseEntity {
     private Member author;
 
     @AttributeOverride(name = "value", column = @Column(name = "persona_name", nullable = false))
-    private PersonaName personaName;
+    private PersonaName name;
 
     @AttributeOverride(name = "value", column = @Column(name = "content", nullable = false, columnDefinition = "TEXT"))
     private Content content;
@@ -39,15 +39,15 @@ public class Prompt extends BaseEntity {
     private boolean isPublic;
 
     @Builder
-    Prompt(Member author, PersonaName personaName, Content content, boolean isPublic) {
+    Persona(Member author, PersonaName name, Content content, boolean isPublic) {
         this.author = author;
-        this.personaName = personaName;
+        this.name = name;
         this.content = content;
         this.isPublic = isPublic;
     }
 
     public void update(PersonaName personaName, Content content, boolean isPublic) {
-        this.personaName = personaName;
+        this.name = personaName;
         this.content = content;
         this.isPublic = isPublic;
     }

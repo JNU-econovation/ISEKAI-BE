@@ -1,7 +1,7 @@
-package jnu.econovation.isekai.prompt.dto.internal
+package jnu.econovation.isekai.persona.dto.internal
 
 
-data class PromptRequest(
+data class PersonaRequest(
     val personaName: String,
     val content: String,
     val isPublic: Boolean

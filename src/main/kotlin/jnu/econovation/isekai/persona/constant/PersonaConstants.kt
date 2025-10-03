@@ -1,6 +1,6 @@
-package jnu.econovation.isekai.prompt.constant
+package jnu.econovation.isekai.persona.constant
 
-object PromptConstants {
+object PersonaConstants {
     const val PERSONA_NAME_MIN_LENGTH = 2
     const val PERSONA_NAME_MAX_LENGTH = 30
     const val CONTENT_MAX_LENGTH = 5000

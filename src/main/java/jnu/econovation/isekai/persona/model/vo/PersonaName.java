@@ -1,7 +1,7 @@
-package jnu.econovation.isekai.prompt.model.vo;
+package jnu.econovation.isekai.persona.model.vo;
 
-import static jnu.econovation.isekai.prompt.constant.PromptConstants.PERSONA_NAME_MAX_LENGTH;
-import static jnu.econovation.isekai.prompt.constant.PromptConstants.PERSONA_NAME_MIN_LENGTH;
+import static jnu.econovation.isekai.persona.constant.PersonaConstants.PERSONA_NAME_MAX_LENGTH;
+import static jnu.econovation.isekai.persona.constant.PersonaConstants.PERSONA_NAME_MIN_LENGTH;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import jakarta.persistence.Embeddable;

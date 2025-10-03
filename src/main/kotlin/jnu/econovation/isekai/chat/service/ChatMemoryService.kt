@@ -18,7 +18,7 @@ import jnu.econovation.isekai.chat.service.internal.LongTermMemoryDataService
 import jnu.econovation.isekai.gemini.client.GeminiClient
 import jnu.econovation.isekai.gemini.enums.GeminiModel
 import jnu.econovation.isekai.member.entity.Member
-import jnu.econovation.isekai.prompt.config.PromptConfig
+import jnu.econovation.isekai.persona.config.PromptConfig
 import org.springframework.data.redis.connection.RedisConnectionFactory
 import org.springframework.data.redis.support.atomic.RedisAtomicInteger
 import org.springframework.retry.annotation.Backoff
