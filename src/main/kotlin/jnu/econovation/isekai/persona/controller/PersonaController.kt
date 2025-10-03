@@ -24,11 +24,11 @@ class PersonaController(private val service: PersonaService) {
 
     @GetMapping
     fun getPrompts(@ResolvePageable(allowed = [SortField.CREATED_AT]) pageable: Pageable): Page<PersonaPageResponse> {
-        return service.get(pageable)
+        return service.getDTO(pageable)
     }
 
     @GetMapping("/{id}")
-    fun getPrompt(@PathVariable id: Long): PersonaResponse = service.getForResponse(id)
+    fun getPrompt(@PathVariable id: Long): PersonaResponse = service.getResponse(id)
 
     @PutMapping("/{id}")
     fun updatePrompt(

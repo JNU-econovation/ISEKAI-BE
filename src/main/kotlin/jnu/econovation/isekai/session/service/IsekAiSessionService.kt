@@ -4,7 +4,7 @@ import jnu.econovation.isekai.chat.dto.internal.ChatDTO
 import jnu.econovation.isekai.chat.service.ChatMemoryService
 import jnu.econovation.isekai.gemini.client.GeminiLiveClient
 import jnu.econovation.isekai.member.constant.MemberConstants.MASTER_MEMBER
-import jnu.econovation.isekai.prompt.service.PromptService
+import jnu.econovation.isekai.persona.service.PersonaService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,24 +19,28 @@ private val logger = KotlinLogging.logger {}
 class IsekAiSessionService(
     private val liveClient: GeminiLiveClient,
     private val chatMemoryService: ChatMemoryService,
-    private val promptService: PromptService
+    private val personaService: PersonaService
 ) {
     private val independentScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     suspend fun processVoiceChunk(voiceStream: Flow<ByteArray>, personaId: Long) {
-        val persona = promptService.get(personaId)
+        val persona = personaService.getDTO(personaId)
+//        val memory = chatMemoryService.
         liveClient.getLiveResponse(voiceStream, prompt = persona.content)
             ?.collect {
                 logger.info { "gemini response -> $it" }
-                independentScope.launch { saveChat(it.inputSTT, it.output) }
-
+                independentScope.launch { saveChat(personaId, it.inputSTT, it.output) }
             }
     }
 
-    private suspend fun saveChat(input: String, output: String) {
+    private suspend fun saveChat(personaId: Long, input: String, output: String) {
         try {
             //todo: 추후 MASTER MEMBER -> 사용자화
-            chatMemoryService.save(MASTER_MEMBER, ChatDTO(input, output))
+            chatMemoryService.save(
+                MASTER_MEMBER,
+                personaService.getEntity(personaId),
+                ChatDTO(input, output)
+            )
         } catch (e: Exception) {
             logger.error(e) { "채팅 저장 중 예외 발생" }
         }

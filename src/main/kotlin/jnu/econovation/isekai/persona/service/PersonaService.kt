@@ -38,20 +38,24 @@ class PersonaService(
     }
 
     @Transactional(readOnly = true)
-    fun get(pageable: Pageable): Page<PersonaPageResponse> {
+    fun getDTO(pageable: Pageable): Page<PersonaPageResponse> {
         return repository.findAll(pageable).map { PersonaPageResponse.from(it) }
     }
 
     @Transactional(readOnly = true)
-    fun get(id: Long): PersonaDTO {
+    fun getEntity(id: Long): Persona {
         return repository.findById(id)
-            .map { PersonaDTO.from(it) }
             .orElseThrow { NoSuchPersonaException() }
     }
 
     @Transactional(readOnly = true)
-    fun getForResponse(id: Long): PersonaResponse {
-        return get(id).toResponseDTO()
+    fun getDTO(id: Long): PersonaDTO {
+        return PersonaDTO.from(getEntity(id))
+    }
+
+    @Transactional(readOnly = true)
+    fun getResponse(id: Long): PersonaResponse {
+        return getDTO(id).toResponseDTO()
     }
 
     @Transactional
