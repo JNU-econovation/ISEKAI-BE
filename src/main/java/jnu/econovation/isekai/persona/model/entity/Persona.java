@@ -51,15 +51,4 @@ public class Persona extends BaseEntity {
         this.content = content;
         this.isPublic = isPublic;
     }
-
-    @Override
-    public String toString() {
-        return "Persona{" +
-                "id=" + id +
-                ", author=" + author +
-                ", name=" + name +
-                ", content=" + content +
-                ", isPublic=" + isPublic +
-                '}';
-    }
 }
