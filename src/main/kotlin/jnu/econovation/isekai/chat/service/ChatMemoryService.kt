@@ -248,11 +248,11 @@ class ChatMemoryService(
         return mapper.readValue(response, SummarizeDTO::class.java)
     }
 
-    //TODO: Exponential Backoff
+    //todo: Jitter 추가
     @Retryable(
         value = [ServerException::class],
-        maxAttempts = 4,
-        backoff = Backoff(delay = 3000)
+        maxAttempts = 5,
+        backoff = Backoff(delay = 2000, multiplier = 2.0)
     )
     private suspend fun getSummaryResponse(
         recentChatString: String,
@@ -268,8 +268,8 @@ class ChatMemoryService(
 
     @Retryable(
         value = [ServerException::class],
-        maxAttempts = 4,
-        backoff = Backoff(delay = 3000)
+        maxAttempts = 5,
+        backoff = Backoff(delay = 2000, multiplier = 2.0)
     )
     private suspend fun embedVector(text: String, model: GeminiModel) =
         geminiClient.getEmbedding(text, model).first().values().get().toFloatArray()
