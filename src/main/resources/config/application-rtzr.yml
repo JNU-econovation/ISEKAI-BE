@@ -1,0 +1,10 @@
+rtzr:
+  client-id: ${RTZR_CLIENT_ID}
+  client-secret: ${RTZR_CLIENT_SECRET}
+  auth-url: https://openapi.vito.ai/v1/authenticate
+  stt-url: wss://openapi.vito.ai/v1/transcribe:streaming
+  sample-rate: 16000
+  encoding: LINEAR16
+  model-name: sommers_ko
+  domain: MEETING
+  language: ko
