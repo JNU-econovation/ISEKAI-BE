@@ -9,3 +9,4 @@ spring:
       - classpath:config/application-dev-db.yml
       - classpath:config/application-gemini.yml
       - classpath:config/application-prompt.yml
+      - classpath:config/application-rtzr.yml
