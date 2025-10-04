@@ -104,7 +104,7 @@ class KioskAiSessionHandlerE2ETest(
 
             // 5. 마무리
             logger.info { "음성 스트리밍 끝!" }
-            delay(5000)
+            delay(10000)
             session.close()
         }
         logger.info { "음성 스트리밍 e2e 끝" }
