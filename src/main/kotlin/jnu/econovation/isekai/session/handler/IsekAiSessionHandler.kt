@@ -35,7 +35,7 @@ class IsekAiSessionHandler(
                 val personaId = session.attributes["personaId"] as? Long
                     ?: throw InternalServerException(IllegalStateException("personaId is null"))
 
-                service.processVoiceChunk(clientVoiceStream, personaId)
+                service.processVoiceChunk(clientVoiceStream, personaId, sessionScope)
             } catch (_: CancellationException) {
                 logger.info { "세션 ${session.id} 처리가 정상적으로 취소되었습니다." }
             } catch (e: Exception) {

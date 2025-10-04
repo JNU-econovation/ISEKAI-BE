@@ -1,10 +1,12 @@
 package jnu.econovation.isekai.gemini.client
 
+import com.google.common.collect.ImmutableList
 import com.google.genai.AsyncSession
 import com.google.genai.Client
 import com.google.genai.types.*
 import jnu.econovation.isekai.common.exception.server.InternalServerException
 import jnu.econovation.isekai.gemini.config.GeminiConfig
+import jnu.econovation.isekai.gemini.dto.client.request.GeminiInput
 import jnu.econovation.isekai.gemini.dto.client.response.GeminiLiveResponse
 import jnu.econovation.isekai.gemini.enums.GeminiModel
 import kotlinx.coroutines.channels.ProducerScope
@@ -21,19 +23,24 @@ class GeminiLiveClient(
     private val config: GeminiConfig
 ) {
 
-    private val logger = KotlinLogging.logger {}
+    companion object {
+        private val logger = KotlinLogging.logger {}
+        private val googleSearchTool = Tool.builder()
+            .googleSearch(GoogleSearch.builder().build())
+            .build()
+    }
 
     private val client = Client.builder().apiKey(config.apiKey).build()
 
     suspend fun getLiveResponse(
-        inputVoice: Flow<ByteArray>,
+        inputData: Flow<GeminiInput>,
         prompt: String,
         model: GeminiModel = GeminiModel.GEMINI_2_5_FLASH_LIVE
     ): Flow<GeminiLiveResponse>? {
         return try {
             callbackFlow {
                 val session = client.async.live
-                    .connect(model.toString(), buildLiveConfig(prompt))
+                    .connect(model.toString(), buildConfig(prompt))
                     .await()
 
                 logger.debug { "Gemini Live 세션이 연결되었습니다." }
@@ -42,7 +49,7 @@ class GeminiLiveClient(
                 val outputBuffer = StringBuilder()
 
                 session.receive { onMessageReceived(message = it, inputSTTBuffer, outputBuffer) }
-                launch { send(inputVoice, session) }
+                launch { send(inputData, session) }
                 awaitClose { onClosed(session) }
             }
         } catch (e: Exception) {
@@ -50,12 +57,13 @@ class GeminiLiveClient(
         }
     }
 
-    private fun buildLiveConfig(prompt: String): LiveConnectConfig {
+    private fun buildConfig(prompt: String): LiveConnectConfig {
         return LiveConnectConfig.builder()
             .responseModalities(Modality.Known.TEXT)
             .inputAudioTranscription(AudioTranscriptionConfig.builder().build())
             .realtimeInputConfig(buildRealTimeInputConfig())
             .systemInstruction(Content.fromParts(Part.fromText(prompt)))
+            .tools(ImmutableList.of(googleSearchTool))
             .build()
     }
 
@@ -92,14 +100,30 @@ class GeminiLiveClient(
         }
     }
 
-    private suspend fun send(inputVoice: Flow<ByteArray>, session: AsyncSession) {
-        inputVoice.collect { voiceChunk ->
-            session.sendRealtimeInput(buildAudioContent(voiceChunk))
-                .exceptionally {
-                    logger.error(it) { "audio chunk 보내는 중 에러 발생 -> ${it.message}" }
-                    return@exceptionally null
+    private suspend fun send(
+        inputData: Flow<GeminiInput>,
+        session: AsyncSession
+    ) {
+        inputData.collect { data ->
+
+            when (data) {
+                is GeminiInput.Audio -> {
+                    session.sendRealtimeInput(buildAudioContent(data.chunk))
+                        .exceptionally {
+                            logger.error(it) { "audio chunk 보내는 중 에러 발생 -> ${it.message}" }
+                            return@exceptionally null
+                        }.await()
                 }
-                .await()
+
+                is GeminiInput.Context -> {
+                    session.sendRealtimeInput(
+                        buildTextContent(data.shortTermMemory, data.longTermMemory)
+                    ).exceptionally {
+                        logger.error(it) { "audio chunk 보내는 중 에러 발생 -> ${it.message}" }
+                        return@exceptionally null
+                    }.await()
+                }
+            }
         }
     }
 
@@ -118,9 +142,20 @@ class GeminiLiveClient(
             .build()
     }
 
-    private fun buildAudioContent(voiceChunk: ByteArray): LiveSendRealtimeInputParameters {
+    private fun buildAudioContent(
+        voiceChunk: ByteArray,
+    ): LiveSendRealtimeInputParameters {
         return LiveSendRealtimeInputParameters.builder()
             .audio(Blob.builder().mimeType("audio/pcm").data(voiceChunk))
+            .build()
+    }
+
+    private fun buildTextContent(
+        shortTermMemory: String,
+        longTermMemory: String
+    ): LiveSendRealtimeInputParameters {
+        return LiveSendRealtimeInputParameters.builder()
+            .text("shortTermMemory: $shortTermMemory, longTermMemory: $longTermMemory")
             .build()
     }
 

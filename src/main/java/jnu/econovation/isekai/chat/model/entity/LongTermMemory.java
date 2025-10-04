@@ -10,6 +10,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jnu.econovation.isekai.common.entity.BaseEntity;
 import jnu.econovation.isekai.member.entity.Member;
+import jnu.econovation.isekai.persona.model.entity.Persona;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -22,6 +23,7 @@ import org.hibernate.type.SqlTypes;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class LongTermMemory extends BaseEntity {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -29,6 +31,10 @@ public class LongTermMemory extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "host_member_id", nullable = false)
     private Member hostMember;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "persona_id", nullable = false)
+    private Persona persona;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String summary;
@@ -39,7 +45,8 @@ public class LongTermMemory extends BaseEntity {
     private float[] embedding;
 
     @Builder
-    LongTermMemory(String summary, Member hostMember, float[] embedding) {
+    LongTermMemory(Persona persona, Member hostMember, String summary, float[] embedding) {
+        this.persona = persona;
         this.summary = summary;
         this.hostMember = hostMember;
         this.embedding = embedding;
