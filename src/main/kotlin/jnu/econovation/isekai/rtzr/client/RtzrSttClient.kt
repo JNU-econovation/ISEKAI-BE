@@ -59,7 +59,7 @@ class RtzrSttClient(
 
         val session = wsClient.execute(
             handler,
-            getWebSocketHeader(config, accessToken),
+            getWebSocketHeader(accessToken),
             getUriWithQueryParams(config).toUri()
         ).await()
 
@@ -94,7 +94,7 @@ class RtzrSttClient(
             .build()
     }
 
-    private fun getWebSocketHeader(config: RtzrConfig, accessToken: String): WebSocketHttpHeaders {
+    private fun getWebSocketHeader(accessToken: String): WebSocketHttpHeaders {
         val headers = WebSocketHttpHeaders()
         headers.add("Authorization", "Bearer $accessToken")
         return headers
