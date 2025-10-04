@@ -37,6 +37,7 @@ public class Chat extends BaseEntity {
     private Persona persona;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private Speaker speaker;
 
     @Column(nullable = false, columnDefinition = "TEXT")
