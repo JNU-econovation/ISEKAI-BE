@@ -5,6 +5,7 @@ import jnu.econovation.isekai.rtzr.client.handler.RtzrSttWebSocketHandler
 import jnu.econovation.isekai.rtzr.config.RtzrConfig
 import jnu.econovation.isekai.rtzr.dto.client.response.RtzrAuthResponse
 import jnu.econovation.isekai.rtzr.dto.client.response.RtzrSttResponse
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.Flow
@@ -54,7 +55,8 @@ class RtzrSttClient(
     suspend fun stt(
         voiceStream: Flow<ByteArray>,
         accessToken: String,
-        scope: CoroutineScope
+        scope: CoroutineScope,
+        rtzrReadySignal: CompletableDeferred<Unit>
     ): Flow<RtzrSttResponse> {
 
         val session = wsClient.execute(
@@ -62,6 +64,9 @@ class RtzrSttClient(
             getWebSocketHeader(accessToken),
             getUriWithQueryParams(config).toUri()
         ).await()
+
+        rtzrReadySignal.complete(Unit)
+        logger.info { "RTZR STT WebSocket 연결 수립 및 신호 전송 완료" }
 
         scope.launch {
             try {

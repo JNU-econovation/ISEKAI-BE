@@ -27,6 +27,7 @@ import jnu.econovation.isekai.persona.model.entity.Persona
 import jnu.econovation.isekai.persona.service.PersonaService
 import jnu.econovation.isekai.prompt.config.PromptConfig
 import jnu.econovation.isekai.rtzr.service.RtzrSttService
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -109,12 +110,13 @@ class ChatMemoryService(
 
     @Transactional(readOnly = true)
     suspend fun findMemoriesFromVoiceStream(
+        rtzrReadySignal: CompletableDeferred<Unit>,
         voiceChunk: Flow<ByteArray>,
         persona: Persona,
         hostMember: Member,
         scope: CoroutineScope
     ): Flow<GeminiInput.Context> {
-        val sttResultFlow = rtzrSttService.stt(voiceChunk, scope)
+        val sttResultFlow = rtzrSttService.stt(voiceChunk, scope, rtzrReadySignal)
 
         val (_, shortTermMemory) = getShortTermMemory(persona, hostMember)
 
