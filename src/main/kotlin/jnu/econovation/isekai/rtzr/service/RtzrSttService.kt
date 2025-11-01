@@ -5,6 +5,7 @@ import jnu.econovation.isekai.common.exception.server.InternalServerException
 import jnu.econovation.isekai.rtzr.cache.service.RtzrAccessTokenService
 import jnu.econovation.isekai.rtzr.client.RtzrSttClient
 import jnu.econovation.isekai.rtzr.dto.client.response.RtzrSttResponse
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
@@ -23,14 +24,18 @@ class RtzrSttService(
 
     private val logger = KotlinLogging.logger {}
 
-    fun stt(voiceStream: Flow<ByteArray>, scope: CoroutineScope): Flow<RtzrSttResponse> {
+    fun stt(
+        voiceStream: Flow<ByteArray>,
+        scope: CoroutineScope,
+        rtzrReadySignal: CompletableDeferred<Unit>
+    ): Flow<RtzrSttResponse> {
         return flow {
             var accessToken: String = cacheService.get()
                 ?: cacheService.overwrite(client.auth().accessToken)
 
             for (attempt in 1..TOTAL_ATTEMPTS) {
                 try {
-                    emitAll(client.stt(voiceStream, accessToken, scope))
+                    emitAll(client.stt(voiceStream, accessToken, scope, rtzrReadySignal))
                     return@flow
                 } catch (e: DeploymentException) {
                     val is401Error = e.message?.contains("401") ?: false

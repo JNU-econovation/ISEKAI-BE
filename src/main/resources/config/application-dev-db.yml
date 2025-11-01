@@ -1,7 +1,7 @@
 spring:
   config.activate.on-profile: dev
   datasource:
-    url: jdbc:postgresql://localhost:5432/isekai
+    url: jdbc:postgresql://localhost:15432/isekai
     username: postgres
     password: 1
     driver-class-name: org.postgresql.Driver
