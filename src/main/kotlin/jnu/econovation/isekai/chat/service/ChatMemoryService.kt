@@ -113,12 +113,12 @@ class ChatMemoryService(
         rtzrReadySignal: CompletableDeferred<Unit>,
         voiceChunk: Flow<ByteArray>,
         persona: Persona,
-        hostMember: Member,
+        hostMemberId: Long,
         scope: CoroutineScope
     ): Flow<GeminiInput.Context> {
         val sttResultFlow = rtzrSttService.stt(voiceChunk, scope, rtzrReadySignal)
 
-        val (_, shortTermMemory) = getShortTermMemory(persona, hostMember)
+        val (_, shortTermMemory) = getShortTermMemory(persona, hostMemberId)
 
         return sttResultFlow.map { sttResult ->
             val embedding = try {
@@ -128,7 +128,7 @@ class ChatMemoryService(
                 embedVector(sttResult.alternatives.first().text, EMBEDDING_PLANS.planB)
             }
 
-            val longTermMemory = getLongTermMemory(persona, hostMember, embedding)
+            val longTermMemory = getLongTermMemory(persona, hostMemberId, embedding)
 
             GeminiInput.Context(shortTermMemory, longTermMemory)
         }
@@ -140,7 +140,7 @@ class ChatMemoryService(
         hostMember: Member,
         counter: RedisAtomicInteger
     ) {
-        val (recentChat, shortTermMemory) = getShortTermMemory(persona, hostMember)
+        val (recentChat, shortTermMemory) = getShortTermMemory(persona, hostMember.id)
 
         if (recentChat.isEmpty()) {
             throw InternalServerException(IllegalStateException("consolidation count 가 ${CONSOLIDATION_COUNT}이지만, recent chat 이 empty임"))
@@ -219,10 +219,10 @@ class ChatMemoryService(
 
     private fun getShortTermMemory(
         persona: Persona,
-        hostMember: Member
+        hostMemberId: Long
     ): Pair<List<ChatHistoryDTO>, String> {
         val recentChat = chatService
-            .getRecentChats(persona, hostMember, LONG_TERM_MEMORY_COUNT)
+            .getRecentChats(persona, hostMemberId, LONG_TERM_MEMORY_COUNT)
             .map { ChatHistoryDTO.from(it) }
 
         val shortTermMemory = recentChat.joinToString("\n\n") { it.content }
@@ -231,12 +231,12 @@ class ChatMemoryService(
 
     private fun getLongTermMemory(
         persona: Persona,
-        hostMember: Member,
+        hostMemberId: Long,
         embedding: FloatArray
     ): String {
         val longTermMemory = longTermMemoryService.findSimilarMemories(
             persona = persona,
-            hostMember = hostMember,
+            hostMemberId = hostMemberId,
             embedding = embedding,
             limit = LONG_TERM_MEMORY_LIMIT
         )

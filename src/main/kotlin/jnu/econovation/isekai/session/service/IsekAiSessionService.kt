@@ -3,7 +3,6 @@ package jnu.econovation.isekai.session.service
 import jnu.econovation.isekai.chat.service.ChatMemoryService
 import jnu.econovation.isekai.gemini.client.GeminiLiveClient
 import jnu.econovation.isekai.gemini.dto.client.request.GeminiInput
-import jnu.econovation.isekai.member.constant.MemberConstants.MASTER_MEMBER
 import jnu.econovation.isekai.persona.service.PersonaService
 import jnu.econovation.isekai.prompt.service.PromptService
 import jnu.econovation.isekai.session.constant.SessionConstant.FLOW_BUFFER_SIZE
@@ -54,7 +53,7 @@ class IsekAiSessionService(
                 rtzrReadySignal,
                 sharedVoiceStream,
                 persona,
-                MASTER_MEMBER,
+                1L,
                 webSocketSessionScope
             )
 
