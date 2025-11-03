@@ -1,7 +1,7 @@
 package jnu.econovation.isekai.persona.initializer
 
 import jnu.econovation.isekai.common.exception.server.InternalServerException
-import jnu.econovation.isekai.member.constant.MemberConstants.MASTER_MEMBER
+import jnu.econovation.isekai.member.constant.MemberConstants.MASTER_EMAIL
 import jnu.econovation.isekai.member.service.MemberService
 import jnu.econovation.isekai.persona.model.entity.Persona
 import jnu.econovation.isekai.persona.model.vo.Content
@@ -31,7 +31,7 @@ class PersonaDevInitializer(
     @Transactional
     @EventListener(ApplicationReadyEvent::class)
     fun init() {
-        val author = memberService.findByEmailEntity(MASTER_MEMBER.email)
+        val author = memberService.findByEmailEntity(MASTER_EMAIL)
             ?: throw InternalServerException(IllegalStateException("MASTER MEMBER를 찾을 수 없습니다."))
 
         if (personaRepository.count() < 1) {
