@@ -9,3 +9,6 @@ spring:
     properties.hibernate.format_sql: true
     defer-datasource-initialization: true
     hibernate.ddl-auto: create
+  data.redis:
+    host: localhost
+    port: 16379
