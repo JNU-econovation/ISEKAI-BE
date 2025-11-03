@@ -8,7 +8,7 @@ LOG_PATH="/var/log/$APP_NAME"
 PID_FILE="/tmp/$APP_NAME.pid"
 
 export SPRING_PROFILES_ACTIVE=prod
-export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+export JAVA_HOME=/opt/java/openjdk
 export PATH=$JAVA_HOME/bin:$PATH
 
 echo "🔄 Git main 브랜치 pull 중..."
