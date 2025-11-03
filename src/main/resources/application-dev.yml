@@ -1,7 +1,7 @@
 spring:
   config.activate.on-profile: dev
   datasource:
-    url: jdbc:postgresql://localhost:5432/isekai
+    url: jdbc:postgresql://localhost:15432/isekai
     username: postgres
     password: 1
     driver-class-name: org.postgresql.Driver
@@ -9,3 +9,6 @@ spring:
     properties.hibernate.format_sql: true
     defer-datasource-initialization: true
     hibernate.ddl-auto: create
+  data.redis:
+    host: localhost
+    port: 16379

@@ -1,12 +1,18 @@
 package jnu.econovation.isekai.e2e.session
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
+import jakarta.websocket.ContainerProvider
 import jnu.econovation.isekai.Application
+import jnu.econovation.isekai.enums.MessageType
 import jnu.econovation.isekai.gemini.config.GeminiConfig
+import jnu.econovation.isekai.session.constant.SessionConstant.WEBSOCKET_BUFFER_SIZE
+import jnu.econovation.isekai.session.dto.response.SessionResponse
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import mu.KotlinLogging
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -16,15 +22,14 @@ import org.springframework.core.io.ResourceLoader
 import org.springframework.test.context.TestConstructor
 import org.springframework.test.context.junit.jupiter.SpringExtension
 import org.springframework.web.socket.BinaryMessage
+import org.springframework.web.socket.TextMessage
 import org.springframework.web.socket.WebSocketHttpHeaders
 import org.springframework.web.socket.WebSocketSession
+import org.springframework.web.socket.client.WebSocketClient
 import org.springframework.web.socket.client.standard.StandardWebSocketClient
 import org.springframework.web.socket.handler.BinaryWebSocketHandler
 import java.net.URI
-import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
-
-private val logger = KotlinLogging.logger {}
 
 @SpringBootTest(
     classes = [Application::class],
@@ -36,30 +41,38 @@ class KioskAiSessionHandlerE2ETest(
     @param:LocalServerPort
     private var port: Int,
     private val resourceLoader: ResourceLoader,
-    private val geminiConfig: GeminiConfig
+    private val geminiConfig: GeminiConfig,
+    private val mapper: ObjectMapper
 ) {
 
     private companion object {
         const val PERSONA_ID = 1
+        val logger = KotlinLogging.logger {}
+        val webSocketHeaders = WebSocketHttpHeaders()
     }
 
-    private val client = StandardWebSocketClient()
-    private val receivedMessages = ArrayBlockingQueue<ByteArray>(10)
+    private val webSocketURI = URI("ws://localhost:${port}/websocket/voice?personaId=${PERSONA_ID}")
 
-    @AfterEach
-    fun tearDown() {
-        receivedMessages.clear()
+    private val client: WebSocketClient by lazy {
+        val webSocketContainer = ContainerProvider.getWebSocketContainer()
+        webSocketContainer.defaultMaxBinaryMessageBufferSize = WEBSOCKET_BUFFER_SIZE
+        webSocketContainer.defaultMaxTextMessageBufferSize = WEBSOCKET_BUFFER_SIZE
+        StandardWebSocketClient(webSocketContainer)
     }
+
+    private lateinit var readyLatch: CompletableDeferred<Unit>
 
     @Test
     @DisplayName("클라이언트가 연결 후 바이너리 메시지를 전송하면 핸들러가 처리한다")
     fun e2e() {
-        val latch = CompletableDeferred<Unit>()
-        val headers = WebSocketHttpHeaders()
-        val session = getSession(latch, headers)
+        val connectionLatch = CompletableDeferred<Unit>()
+        readyLatch = CompletableDeferred()
+        val session = getSession(connectionLatch, webSocketHeaders)
 
         runBlocking {
-            latch.await()
+            withTimeout(5000) { connectionLatch.await() }
+
+            withTimeout(5000) { readyLatch.await() }
 
             val resource = resourceLoader.getResource("classpath:test/e2e-test.wav")
             val inputStream = resource.inputStream
@@ -118,15 +131,30 @@ class KioskAiSessionHandlerE2ETest(
             latch.complete(Unit)
         }
 
-        override fun handleBinaryMessage(
-            session: WebSocketSession,
-            message: BinaryMessage
-        ) {
-            val bytes = ByteArray(message.payload.remaining())
-            message.payload.get(bytes)
-            receivedMessages.offer(bytes)
+        override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
+            try {
+                val payload = message.payload
+                logger.debug { "테스트 클라이언트 수신 (Text): $payload" }
+
+                val response = mapper.readValue<SessionResponse>(payload)
+
+                when (response.messageType) {
+                    MessageType.SERVER_READY -> {
+                        logger.info { ">>> 서버 준비 완료 신호 수신 <<<" }
+                        readyLatch.complete(Unit)
+                    }
+
+                    MessageType.GEMINI_OUTPUT -> {
+                        logger.info { "Gemini output 수신 -> ${response.content}" }
+                    }
+                }
+            } catch (e: Exception) {
+                logger.error("텍스트 메시지 처리 중 에러", e)
+            }
         }
-    }, headers, URI("ws://localhost:${port}/websocket/voice?personaId=${PERSONA_ID}"))
+
+        override fun handleBinaryMessage(session: WebSocketSession, message: BinaryMessage) {}
+    }, headers, webSocketURI)
         .get(3, TimeUnit.SECONDS)
 
     private suspend fun sendSilence(
