@@ -2,5 +2,6 @@ security:
   allowed-front-end-origins:
     - http://localhost:*
     - https://localhost:*
+    - https://isekai-be-ssr.vercel.app
 
 aes256.key: ${AES256_KEY}
