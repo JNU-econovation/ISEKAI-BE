@@ -37,7 +37,7 @@ import java.util.concurrent.TimeUnit
 )
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @ExtendWith(SpringExtension::class)
-class KioskAiSessionHandlerE2ETest(
+class IsekAiSessionHandlerE2ETest(
     @param:LocalServerPort
     private var port: Int,
     private val resourceLoader: ResourceLoader,
