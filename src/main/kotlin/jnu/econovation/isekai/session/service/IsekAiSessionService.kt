@@ -56,6 +56,8 @@ class IsekAiSessionService(
                 1L,
                 webSocketSessionScope
             )
+            .filter { it.shortTermMemory.isNotEmpty() }
+            .onEach { logger.info { "gemini slow input -> $it" } }
 
         val mergedStream = merge(voiceFastInput, contextSlowInput)
             .onEach { logger.debug { "gemini input -> $it" } }
