@@ -31,6 +31,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import mu.KotlinLogging
 import org.springframework.data.redis.connection.RedisConnectionFactory
 import org.springframework.data.redis.support.atomic.RedisAtomicInteger
@@ -117,6 +118,7 @@ class ChatMemoryService(
         scope: CoroutineScope
     ): Flow<GeminiInput.Context> {
         val sttResultFlow = rtzrSttService.stt(voiceChunk, scope, rtzrReadySignal)
+            .onEach { logger.info { "rtzr stt 결과 -> ${it.alternatives.first().text}" } }
 
         val (_, shortTermMemory) = getShortTermMemory(persona, hostMemberId)
 
