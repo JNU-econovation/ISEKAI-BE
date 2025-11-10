@@ -1,6 +1,7 @@
 package jnu.econovation.isekai.common.config
 
 import jnu.econovation.isekai.common.resolver.CustomPageableArgumentResolver
+import jnu.econovation.isekai.common.security.config.AllowedOriginsProperties
 import org.springframework.context.annotation.Configuration
 import org.springframework.web.method.support.HandlerMethodArgumentResolver
 import org.springframework.web.servlet.config.annotation.CorsRegistry
@@ -8,7 +9,8 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 
 @Configuration
 class WebConfig(
-    private val customPageableArgumentResolver: CustomPageableArgumentResolver
+    private val customPageableArgumentResolver: CustomPageableArgumentResolver,
+    private val allowedOrigins: AllowedOriginsProperties
 ) : WebMvcConfigurer {
 
     override fun addArgumentResolvers(resolvers: MutableList<HandlerMethodArgumentResolver>) {
@@ -17,7 +19,7 @@ class WebConfig(
 
     override fun addCorsMappings(registry: CorsRegistry) {
         registry.addMapping("/**")
-            .allowedOriginPatterns("http://localhost:*")
+            .allowedOriginPatterns(*allowedOrigins.allowedFrontEndOrigins.toTypedArray())
             .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
             .allowedHeaders("*")
             .allowCredentials(true)
