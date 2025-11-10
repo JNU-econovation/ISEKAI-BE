@@ -96,6 +96,7 @@ class RtzrSttClient(
             .queryParam("model_name", config.modelName)
             .queryParam("domain", config.domain)
             .queryParam("language", config.language)
+            .queryParam("use_disfluency_filter", config.useDisfluencyFilter)
             .build()
     }
 

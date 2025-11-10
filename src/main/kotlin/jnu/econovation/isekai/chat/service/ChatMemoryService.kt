@@ -30,6 +30,7 @@ import jnu.econovation.isekai.rtzr.service.RtzrSttService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import mu.KotlinLogging
@@ -122,19 +123,21 @@ class ChatMemoryService(
 
         val (_, shortTermMemory) = getShortTermMemory(persona, hostMemberId)
 
-        return sttResultFlow.map { sttResult ->
-            val embedding = try {
-                embedVector(sttResult.alternatives.first().text, EMBEDDING_PLANS.planA)
-            } catch (_: ServerException) {
-                logger.warn { "Retry exhausted로 인한 임베딩 교체 : ${EMBEDDING_PLANS.planA} -> ${EMBEDDING_PLANS.planB}" }
-                embedVector(sttResult.alternatives.first().text, EMBEDDING_PLANS.planB)
+        return sttResultFlow
+            .map { it.alternatives.first().text }
+            .filter { it.isNotBlank() }
+            .map {
+                val embedding = try {
+                    embedVector(it, EMBEDDING_PLANS.planA)
+                } catch (_: ServerException) {
+                    logger.warn { "Retry exhausted로 인한 임베딩 교체 : ${EMBEDDING_PLANS.planA} -> ${EMBEDDING_PLANS.planB}" }
+                    embedVector(it, EMBEDDING_PLANS.planB)
+                }
+
+                val longTermMemory = getLongTermMemory(persona, hostMemberId, embedding)
+
+                GeminiInput.Context(shortTermMemory, longTermMemory)
             }
-
-            val longTermMemory = getLongTermMemory(persona, hostMemberId, embedding)
-
-            GeminiInput.Context(shortTermMemory, longTermMemory)
-        }
-
     }
 
     private suspend fun consolidate(
