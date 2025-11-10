@@ -11,6 +11,7 @@ data class RtzrConfig(
     val sampleRate: Int,
     val encoding: String,
     val modelName: String,
-    val domain : String,
-    val language : String
+    val domain: String,
+    val language: String,
+    val useDisfluencyFilter: Boolean
 )
