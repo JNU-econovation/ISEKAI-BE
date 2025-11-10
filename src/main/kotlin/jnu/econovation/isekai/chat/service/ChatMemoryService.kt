@@ -6,7 +6,7 @@ import com.google.genai.errors.ServerException
 import com.google.genai.types.Schema
 import com.google.genai.types.Type
 import jnu.econovation.isekai.chat.constant.ChatConstants.CONSOLIDATION_COUNT
-import jnu.econovation.isekai.chat.constant.ChatConstants.LONG_TERM_MEMORY_COUNT
+import jnu.econovation.isekai.chat.constant.ChatConstants.SHORT_TERM_MEMORY_SIZE
 import jnu.econovation.isekai.chat.constant.ChatConstants.LONG_TERM_MEMORY_LIMIT
 import jnu.econovation.isekai.chat.dto.internal.ChatDTO
 import jnu.econovation.isekai.chat.dto.internal.ChatHistoryDTO
@@ -227,7 +227,7 @@ class ChatMemoryService(
         hostMemberId: Long
     ): Pair<List<ChatHistoryDTO>, String> {
         val recentChat = chatService
-            .getRecentChats(persona, hostMemberId, LONG_TERM_MEMORY_COUNT)
+            .getRecentChats(persona, hostMemberId, SHORT_TERM_MEMORY_SIZE)
             .map { ChatHistoryDTO.from(it) }
 
         val shortTermMemory = recentChat.joinToString("\n\n") { it.content }
