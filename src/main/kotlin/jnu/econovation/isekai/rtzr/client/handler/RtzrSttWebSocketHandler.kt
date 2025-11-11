@@ -2,7 +2,6 @@ package jnu.econovation.isekai.rtzr.client.handler
 
 import mu.KotlinLogging
 import kotlinx.coroutines.channels.SendChannel
-import org.springframework.stereotype.Component
 import org.springframework.web.socket.CloseStatus
 import org.springframework.web.socket.TextMessage
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -11,7 +10,6 @@ import org.springframework.web.socket.WebSocketSession
 import org.springframework.web.socket.handler.TextWebSocketHandler
 import kotlin.jvm.java
 
-@Component
 class RtzrSttWebSocketHandler(
     private val rtzrChannel: SendChannel<RtzrSttResponse>,
     private val mapper: ObjectMapper
