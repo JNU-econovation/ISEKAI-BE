@@ -28,6 +28,7 @@ class IsekAiSessionHandler(
     private companion object {
         const val CLIENT_VOICE_STREAM_KEY = "clientVoiceStream"
         const val SESSION_SCOPE_KEY = "sessionScope"
+        const val PERSONA_ID_KEY = "personaId"
 
         val logger = KotlinLogging.logger {}
     }
@@ -49,7 +50,7 @@ class IsekAiSessionHandler(
 
             launch {
                 try {
-                    val personaId = session.attributes["personaId"] as? Long
+                    val personaId = session.attributes[PERSONA_ID_KEY] as? Long
                         ?: throw InternalServerException(IllegalStateException("personaId is null"))
 
                     service.processVoiceChunk(
