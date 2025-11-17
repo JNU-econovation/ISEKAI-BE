@@ -26,6 +26,9 @@ class IsekAiSessionHandler(
 ) : BinaryWebSocketHandler() {
 
     private companion object {
+        const val CLIENT_VOICE_STREAM_KEY = "clientVoiceStream"
+        const val SESSION_SCOPE_KEY = "sessionScope"
+
         val logger = KotlinLogging.logger {}
     }
 
@@ -41,7 +44,7 @@ class IsekAiSessionHandler(
             onBufferOverflow = BufferOverflow.DROP_OLDEST
         )
 
-        val processingJob = webSocketSessionScope.launch {
+        webSocketSessionScope.launch {
             val rtzrReadySignal = CompletableDeferred<Unit>()
 
             launch {
@@ -69,26 +72,25 @@ class IsekAiSessionHandler(
             logger.info { "클라이언트(${session.id})에게 준비 완료 신호 전송" }
         }
 
-        session.attributes["clientVoiceStream"] = clientVoiceStream
-        session.attributes["sessionScope"] = webSocketSessionScope
-        session.attributes["processingJob"] = processingJob
+        session.attributes[CLIENT_VOICE_STREAM_KEY] = clientVoiceStream
+        session.attributes[SESSION_SCOPE_KEY] = webSocketSessionScope
     }
 
     override fun handleBinaryMessage(session: WebSocketSession, message: BinaryMessage) {
         val clientVoiceStream =
-            session.attributes["clientVoiceStream"] as? MutableSharedFlow<ByteArray>
+            session.attributes[CLIENT_VOICE_STREAM_KEY] as? MutableSharedFlow<ByteArray>
 
         val bytes = ByteArray(message.payload.remaining())
         message.payload.get(bytes)
 
-        (session.attributes["sessionScope"] as? CoroutineScope)?.launch {
+        (session.attributes[SESSION_SCOPE_KEY] as? CoroutineScope)?.launch {
             clientVoiceStream?.emit(bytes)
         }
     }
 
     override fun afterConnectionClosed(session: WebSocketSession, status: CloseStatus) {
         logger.info { "Client disconnected: ${session.id}. Cancelling session scope." }
-        val sessionScope = session.attributes["sessionScope"] as? CoroutineScope
+        val sessionScope = session.attributes[SESSION_SCOPE_KEY] as? CoroutineScope
         sessionScope?.cancel()
         sessionRegistry.unregister(session.id)
     }
