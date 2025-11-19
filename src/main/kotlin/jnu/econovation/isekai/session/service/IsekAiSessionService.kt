@@ -50,11 +50,11 @@ class IsekAiSessionService(
 
         val contextSlowInput: Flow<GeminiInput.Context> = memoryService
             .findMemoriesFromVoiceStream(
-                rtzrReadySignal,
-                sharedVoiceStream,
-                persona,
-                1L,
-                webSocketSessionScope
+                rtzrReadySignal = rtzrReadySignal,
+                voiceChunk = sharedVoiceStream,
+                persona = persona,
+                hostMemberId = 1L,
+                scope = webSocketSessionScope
             )
             .filter { it.shortTermMemory.isNotEmpty() }
             .onEach { logger.info { "gemini slow input -> $it" } }
