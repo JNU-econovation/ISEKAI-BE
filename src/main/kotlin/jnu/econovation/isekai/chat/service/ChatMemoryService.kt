@@ -26,6 +26,7 @@ import jnu.econovation.isekai.member.service.MemberService
 import jnu.econovation.isekai.persona.model.entity.Persona
 import jnu.econovation.isekai.persona.service.PersonaService
 import jnu.econovation.isekai.prompt.config.PromptConfig
+import jnu.econovation.isekai.rtzr.dto.client.response.RtzrSttResponse
 import jnu.econovation.isekai.rtzr.service.RtzrSttService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -118,7 +119,9 @@ class ChatMemoryService(
         hostMemberId: Long,
         scope: CoroutineScope
     ): Flow<GeminiInput.Context> {
-        val sttResultFlow = rtzrSttService.stt(voiceChunk, scope, rtzrReadySignal)
+        val sttResultFlow: Flow<RtzrSttResponse> = rtzrSttService
+            .stt(voiceChunk, scope, rtzrReadySignal)
+            .filter { it.final }
             .onEach { logger.info { "rtzr stt 결과 -> ${it.alternatives.first().text}" } }
 
         val (_, shortTermMemory) = getShortTermMemory(persona, hostMemberId)
