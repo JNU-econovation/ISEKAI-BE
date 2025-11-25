@@ -10,9 +10,10 @@ import jnu.econovation.isekai.gemini.config.GeminiConfig
 import jnu.econovation.isekai.gemini.dto.client.request.GeminiInput
 import jnu.econovation.isekai.gemini.dto.client.response.GeminiLiveResponse
 import jnu.econovation.isekai.gemini.constant.enums.GeminiModel
-import jnu.econovation.isekai.gemini.constant.function.GeminiFunctionTools
+import jnu.econovation.isekai.gemini.constant.function.GeminiTools
+import jnu.econovation.isekai.gemini.constant.function.GeminiTools.RESPONSE_TEXT
 import jnu.econovation.isekai.gemini.dto.client.response.GeminiLiveTextResponse
-import jnu.econovation.isekai.gemini.dto.client.response.GeminiLiveTextResponseChunk
+import jnu.econovation.isekai.gemini.dto.client.response.GeminiLiveTurnCompleteResponse
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -21,6 +22,7 @@ import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
+import kotlin.jvm.java
 import kotlin.jvm.optionals.getOrNull
 
 @Component
@@ -31,9 +33,6 @@ class GeminiLiveClient(
 
     companion object {
         private val logger = KotlinLogging.logger {}
-        private val googleSearchTool = Tool.builder()
-            .googleSearch(GoogleSearch.builder().build())
-            .build()
     }
 
     private val client = Client.builder().apiKey(config.apiKey).build()
@@ -49,6 +48,8 @@ class GeminiLiveClient(
                     .connect(model.toString(), buildConfig(prompt))
                     .await()
 
+                val functionFlag = FunctionResponseFlag(false)
+
                 logger.debug { "Gemini Live 세션이 연결되었습니다." }
 
                 val inputSTTBuffer = StringBuilder()
@@ -56,7 +57,13 @@ class GeminiLiveClient(
                 val outputJpBuffer = StringBuilder()
 
                 session.receive {
-                    onMessageReceived(message = it, inputSTTBuffer, outputKrBuffer, outputJpBuffer)
+                    onMessageReceived(
+                        message = it,
+                        inputSTTBuffer,
+                        outputKrBuffer,
+                        outputJpBuffer,
+                        functionFlag
+                    )
                 }
                 launch { send(inputData, session) }
                 awaitClose { onClosed(session) }
@@ -72,7 +79,7 @@ class GeminiLiveClient(
             .inputAudioTranscription(AudioTranscriptionConfig.builder().build())
             .realtimeInputConfig(buildRealTimeInputConfig())
             .systemInstruction(Content.fromParts(Part.fromText(prompt)))
-            .tools(ImmutableList.of(googleSearchTool, GeminiFunctionTools.TEXT_RESPONSE_TOOL))
+            .tools(ImmutableList.of(GeminiTools.GOOGLE_SEARCH_TOOL, GeminiTools.TEXT_RESPONSE_TOOL))
             .build()
     }
 
@@ -80,15 +87,16 @@ class GeminiLiveClient(
         message: LiveServerMessage,
         inputSTTBuffer: StringBuilder,
         outputKrBuffer: StringBuilder,
-        outputJpBuffer: StringBuilder
+        outputJpBuffer: StringBuilder,
+        functionFlag: FunctionResponseFlag
     ) {
         logger.debug { "gemini received -> $message" }
 
         processInputSTT(message, inputSTTBuffer)
 
-        processTurnComplete(message, inputSTTBuffer, outputKrBuffer, outputJpBuffer)
+        processTurnComplete(message, inputSTTBuffer, outputKrBuffer, outputJpBuffer, functionFlag)
 
-        processFunctionCall(message, outputKrBuffer, outputJpBuffer)
+        processFunctionCall(message, outputKrBuffer, outputJpBuffer, functionFlag)
     }
 
 
@@ -107,18 +115,24 @@ class GeminiLiveClient(
         message: LiveServerMessage,
         inputSTTBuffer: StringBuilder,
         outputKrBuffer: StringBuilder,
-        outputJpBuffer: StringBuilder
+        outputJpBuffer: StringBuilder,
+        functionFlag: FunctionResponseFlag
     ) {
         if (message.serverContent().flatMap { it.turnComplete() }.orElse(false)) {
-            val finalInput = inputSTTBuffer.toString()
+            val finalInputSTT = inputSTTBuffer.toString()
             val finalKrOutput = outputKrBuffer.toString()
             val finalJpOutput = outputJpBuffer.toString()
 
-            logger.debug { "서버가 대답을 완료했습니다. STT: [$finalInput], KrResponse: [$finalKrOutput], JpResponse: [$finalJpOutput]" }
+            logger.info { "서버가 대답을 완료했습니다. STT: [$finalInputSTT], KrResponse: [$finalKrOutput], JpResponse: [$finalJpOutput]" }
 
-            if (finalInput.isNotEmpty() || finalKrOutput.isNotEmpty() || finalJpOutput.isNotEmpty()) {
-                val finalTextOutput = GeminiLiveTextResponse(finalKrOutput, finalJpOutput)
-                trySend(GeminiLiveResponse(finalInput, finalTextOutput))
+            functionFlag.handled = false
+
+            if (finalInputSTT.isNotEmpty() || finalKrOutput.isNotEmpty() || finalJpOutput.isNotEmpty()) {
+                trySend(
+                    GeminiLiveTurnCompleteResponse(
+                        finalInputSTT, finalKrOutput, finalJpOutput
+                    )
+                )
             }
 
             inputSTTBuffer.clear()
@@ -127,27 +141,38 @@ class GeminiLiveClient(
         }
     }
 
-    private fun processFunctionCall(
+    private fun ProducerScope<GeminiLiveResponse>.processFunctionCall(
         message: LiveServerMessage,
         outputKrBuffer: StringBuilder,
-        outputJpBuffer: StringBuilder
+        outputJpBuffer: StringBuilder,
+        functionFlag: FunctionResponseFlag
     ) {
+        if (functionFlag.handled) return
+
         message.toolCall().getOrNull()?.functionCalls()?.ifPresent { call ->
-            call.map { Pair(it.name()?.get(), it.args()?.get()) }
-                .onEach { (name, items) ->
-                    logger.info { "함수 이름 : $name, items : $items" }
+            call.map { Triple(it.id()?.orElse(""), it.name()?.get(), it.args()?.get()) }
+                .onEach { (id, name, items) ->
+                    logger.info { "함수 id : $id, 함수 이름 : $name, items : $items" }
                 }
-                .forEach { (name, items) ->
+                .forEach { (id, name, items) ->
                     when (name) {
-                        GeminiFunctionTools.RESPONSE_TEXT -> {
-                            val responseChunk = runCatching {
-                                mapper.convertValue(items, GeminiLiveTextResponseChunk::class.java)
+                        RESPONSE_TEXT -> {
+                            val response = runCatching {
+                                mapper.convertValue(items, GeminiLiveTextResponse::class.java)
                             }.getOrElse {
                                 logger.error(it) { "function params convert error" }
                                 return@forEach
                             }
-                            outputKrBuffer.append(responseChunk.krText)
-                            outputJpBuffer.append(responseChunk.jpText)
+
+                            trySend(response)
+
+                            functionFlag.handled = true
+
+                            outputKrBuffer.setLength(0)
+                            outputKrBuffer.append(response.krText)
+
+                            outputJpBuffer.setLength(0)
+                            outputJpBuffer.append(response.jpText)
                         }
                     }
                 }
@@ -160,7 +185,6 @@ class GeminiLiveClient(
         session: AsyncSession
     ) {
         inputData.collect { data ->
-
             when (data) {
                 is GeminiInput.Audio -> {
                     session.sendRealtimeInput(buildAudioContent(data.chunk))
@@ -214,5 +238,9 @@ class GeminiLiveClient(
             .text("shortTermMemory: $shortTermMemory, longTermMemory: $longTermMemory")
             .build()
     }
+
+    private data class FunctionResponseFlag(
+        var handled: Boolean
+    )
 
 }
