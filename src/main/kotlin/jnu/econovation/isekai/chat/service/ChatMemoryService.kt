@@ -19,7 +19,7 @@ import jnu.econovation.isekai.chat.service.internal.LongTermMemoryDataService
 import jnu.econovation.isekai.common.exception.server.InternalServerException
 import jnu.econovation.isekai.gemini.client.GeminiClient
 import jnu.econovation.isekai.gemini.dto.client.request.GeminiInput
-import jnu.econovation.isekai.gemini.enums.GeminiModel
+import jnu.econovation.isekai.gemini.constant.enums.GeminiModel
 import jnu.econovation.isekai.member.constant.MemberConstants.MASTER_EMAIL
 import jnu.econovation.isekai.member.entity.Member
 import jnu.econovation.isekai.member.service.MemberService
