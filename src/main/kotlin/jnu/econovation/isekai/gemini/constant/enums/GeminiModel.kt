@@ -1,4 +1,4 @@
-package jnu.econovation.isekai.gemini.enums
+package jnu.econovation.isekai.gemini.constant.enums
 
 enum class GeminiModel(val text: String) {
     GEMINI_EMBEDDING_001("gemini-embedding-001"),
