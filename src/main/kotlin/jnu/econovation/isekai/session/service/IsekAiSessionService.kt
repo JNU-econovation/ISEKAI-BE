@@ -54,7 +54,6 @@ class IsekAiSessionService(
                 voiceChunk = sharedVoiceStream,
                 persona = persona,
                 hostMemberId = 1L,
-                scope = webSocketSessionScope
             )
             .filter { it.shortTermMemory.isNotEmpty() }
             .onEach { logger.info { "gemini slow input -> $it" } }
