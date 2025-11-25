@@ -65,7 +65,7 @@ dependencies {
     implementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
 
     //Gemini
-    implementation 'com.google.genai:google-genai:1.15.0'
+    implementation 'com.google.genai:google-genai:1.28.0'
 
     //PostgreSQL
     implementation 'org.postgresql:postgresql'
