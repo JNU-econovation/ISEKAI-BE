@@ -3,8 +3,12 @@ package jnu.econovation.isekai.gemini.constant.function
 import com.google.common.collect.ImmutableMap
 import com.google.genai.types.*
 
-object GeminiFunctionTools {
+object GeminiTools {
     const val RESPONSE_TEXT = "responseText"
+
+    val GOOGLE_SEARCH_TOOL: Tool = Tool.builder()
+        .googleSearch(GoogleSearch.builder().build())
+        .build()
 
     val TEXT_RESPONSE_TOOL: Tool = Tool.builder()
         .functionDeclarations(
@@ -38,12 +42,4 @@ object GeminiFunctionTools {
         )
         .build()
 
-    val TEXT_RESPONSE_TOOL_CONFIG: ToolConfig = ToolConfig.builder()
-        .functionCallingConfig(
-            FunctionCallingConfig.builder()
-                .mode(FunctionCallingConfigMode.Known.ANY)
-                .allowedFunctionNames(listOf(RESPONSE_TEXT))
-                .build()
-        )
-        .build()
 }
