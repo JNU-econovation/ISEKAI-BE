@@ -1,16 +1,14 @@
 package jnu.econovation.isekai.gemini.dto.client.response
 
-data class GeminiLiveResponse(
-    val inputSTT: String,
-    val output: GeminiLiveTextResponse
-)
+sealed interface GeminiLiveResponse
 
-data class GeminiLiveTextResponseChunk(
+data class GeminiLiveTurnCompleteResponse(
+    val inputSTT: String,
     val krText: String,
     val jpText: String
-)
+) : GeminiLiveResponse
 
 data class GeminiLiveTextResponse(
     val krText: String,
     val jpText: String
-)
+) : GeminiLiveResponse
