@@ -48,7 +48,6 @@ class IsekAiSessionService(
         val prompt = promptService.getPrompt(persona)
 
         val geminiInputFlow = createGeminiInputStream(
-            scope = this,
             voiceStream = voiceStream,
             rtzrReadySignal = rtzrReadySignal,
             persona = persona
@@ -62,7 +61,6 @@ class IsekAiSessionService(
 
         try {
             processOutputSynchronization(
-                scope = this,
                 geminiRawResponse = geminiRawResponse,
                 aiServerReadySignal = aiServerReadySignal,
                 onSubtitle = onSubtitle,
@@ -72,16 +70,15 @@ class IsekAiSessionService(
             turnCompleteJob.cancel()
         }
     }
-    
-    private suspend fun createGeminiInputStream(
-        scope: CoroutineScope,
+
+    private suspend fun CoroutineScope.createGeminiInputStream(
         voiceStream: Flow<ByteArray>,
         rtzrReadySignal: CompletableDeferred<Unit>,
-        persona : Persona
+        persona: Persona
     ): Flow<GeminiInput> {
         val sharedVoiceStream = voiceStream
             .buffer(capacity = FLOW_BUFFER_SIZE, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-            .shareIn(scope, SharingStarted.Lazily)
+            .shareIn(this, SharingStarted.Lazily)
 
         val voiceFastInput = sharedVoiceStream.map { GeminiInput.Audio(it) }
 
@@ -114,19 +111,18 @@ class IsekAiSessionService(
     }
 
     private suspend fun processOutputSynchronization(
-        scope: CoroutineScope,
         geminiRawResponse: Flow<GeminiLiveResponse>,
         aiServerReadySignal: CompletableDeferred<Unit>,
         onSubtitle: suspend (String) -> Unit,
         onVoiceChunk: suspend (ByteArray) -> Unit
-    ) {
+    ) = supervisorScope {
         val textResponseFlow = geminiRawResponse
             .filterIsInstance<GeminiLiveTextResponse>()
-            .shareIn(scope, SharingStarted.Lazily)
+            .shareIn(this, SharingStarted.Lazily)
 
         val subtitleQueue = Channel<String>(Channel.BUFFERED)
 
-        val subtitleJob = scope.launch {
+        val subtitleJob = launch {
             try {
                 textResponseFlow.collect {
                     logger.debug { "Subtitle queued: ${it.krText}" }
