@@ -1,5 +1,6 @@
 package jnu.econovation.isekai
 
+import jnu.econovation.isekai.aiServer.config.AiServerConfig
 import jnu.econovation.isekai.common.security.config.AllowedOriginsProperties
 import jnu.econovation.isekai.gemini.config.GeminiConfig
 import jnu.econovation.isekai.prompt.config.PromptConfig
@@ -15,7 +16,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaAuditing
     AllowedOriginsProperties::class,
     GeminiConfig::class,
     PromptConfig::class,
-    RtzrConfig::class
+    RtzrConfig::class,
+    AiServerConfig::class
 )
 class Application
 

@@ -5,11 +5,11 @@ import jnu.econovation.isekai.rtzr.dto.client.response.RtzrAuthResponse
 import jnu.econovation.isekai.rtzr.dto.client.response.RtzrSttResponse
 import jnu.econovation.isekai.rtzr.factory.RtzrSttWebsocketHandlerFactory
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.awaitSingle
@@ -53,9 +53,8 @@ class RtzrSttClient(
     suspend fun stt(
         voiceStream: Flow<ByteArray>,
         accessToken: String,
-        scope: CoroutineScope,
         rtzrReadySignal: CompletableDeferred<Unit>
-    ): Flow<RtzrSttResponse> {
+    ): Flow<RtzrSttResponse> = channelFlow {
         val channel = getChannel()
 
         val handler = handlerFactory.createHandler(channel)
@@ -69,7 +68,7 @@ class RtzrSttClient(
         rtzrReadySignal.complete(Unit)
         logger.info { "RTZR STT WebSocket 연결 수립 및 신호 전송 완료" }
 
-        scope.launch {
+        launch {
             try {
                 voiceStream.collect { chunk ->
                     session.sendMessage(BinaryMessage(chunk))
@@ -80,7 +79,10 @@ class RtzrSttClient(
                 session.close()
             }
         }
-        return channel.consumeAsFlow()
+        awaitClose {
+            logger.info { "RtzrSttClient 종료 (awaitClose)" }
+            session.close()
+        }
     }
 
     private fun getChannel(): Channel<RtzrSttResponse> {
