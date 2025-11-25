@@ -1,5 +1,6 @@
 package jnu.econovation.isekai.gemini.client
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.common.collect.ImmutableList
 import com.google.genai.AsyncSession
 import com.google.genai.Client
@@ -8,7 +9,10 @@ import jnu.econovation.isekai.common.exception.server.InternalServerException
 import jnu.econovation.isekai.gemini.config.GeminiConfig
 import jnu.econovation.isekai.gemini.dto.client.request.GeminiInput
 import jnu.econovation.isekai.gemini.dto.client.response.GeminiLiveResponse
-import jnu.econovation.isekai.gemini.enums.GeminiModel
+import jnu.econovation.isekai.gemini.constant.enums.GeminiModel
+import jnu.econovation.isekai.gemini.constant.function.GeminiFunctionTools
+import jnu.econovation.isekai.gemini.dto.client.response.GeminiLiveTextResponse
+import jnu.econovation.isekai.gemini.dto.client.response.GeminiLiveTextResponseChunk
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -17,10 +21,12 @@ import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
+import kotlin.jvm.optionals.getOrNull
 
 @Component
 class GeminiLiveClient(
-    private val config: GeminiConfig
+    private val config: GeminiConfig,
+    private val mapper: ObjectMapper
 ) {
 
     companion object {
@@ -35,8 +41,8 @@ class GeminiLiveClient(
     suspend fun getLiveResponse(
         inputData: Flow<GeminiInput>,
         prompt: String,
-        model: GeminiModel = GeminiModel.GEMINI_2_5_FLASH_LIVE
-    ): Flow<GeminiLiveResponse>? {
+        model: GeminiModel = GeminiModel.GEMINI_2_5_FLASH_NATIVE_AUDIO
+    ): Flow<GeminiLiveResponse> {
         return try {
             callbackFlow {
                 val session = client.async.live
@@ -46,9 +52,12 @@ class GeminiLiveClient(
                 logger.debug { "Gemini Live 세션이 연결되었습니다." }
 
                 val inputSTTBuffer = StringBuilder()
-                val outputBuffer = StringBuilder()
+                val outputKrBuffer = StringBuilder()
+                val outputJpBuffer = StringBuilder()
 
-                session.receive { onMessageReceived(message = it, inputSTTBuffer, outputBuffer) }
+                session.receive {
+                    onMessageReceived(message = it, inputSTTBuffer, outputKrBuffer, outputJpBuffer)
+                }
                 launch { send(inputData, session) }
                 awaitClose { onClosed(session) }
             }
@@ -59,46 +68,92 @@ class GeminiLiveClient(
 
     private fun buildConfig(prompt: String): LiveConnectConfig {
         return LiveConnectConfig.builder()
-            .responseModalities(Modality.Known.TEXT)
+            .responseModalities(Modality.Known.AUDIO)
             .inputAudioTranscription(AudioTranscriptionConfig.builder().build())
             .realtimeInputConfig(buildRealTimeInputConfig())
             .systemInstruction(Content.fromParts(Part.fromText(prompt)))
-            .tools(ImmutableList.of(googleSearchTool))
+            .tools(ImmutableList.of(googleSearchTool, GeminiFunctionTools.TEXT_RESPONSE_TOOL))
             .build()
     }
 
     private fun ProducerScope<GeminiLiveResponse>.onMessageReceived(
         message: LiveServerMessage,
         inputSTTBuffer: StringBuilder,
-        outputBuffer: StringBuilder
+        outputKrBuffer: StringBuilder,
+        outputJpBuffer: StringBuilder
     ) {
         logger.debug { "gemini received -> $message" }
 
+        processInputSTT(message, inputSTTBuffer)
+
+        processTurnComplete(message, inputSTTBuffer, outputKrBuffer, outputJpBuffer)
+
+        processFunctionCall(message, outputKrBuffer, outputJpBuffer)
+    }
+
+
+    private fun processInputSTT(
+        message: LiveServerMessage,
+        inputSTTBuffer: StringBuilder
+    ) {
         message.serverContent().flatMap { it.inputTranscription() }
             .ifPresent {
                 it.text().ifPresent { inputSTTChunk -> inputSTTBuffer.append(inputSTTChunk) }
             }
+    }
 
-        message.serverContent().flatMap { it.modelTurn() }.flatMap { it.parts() }
-            .ifPresent { parts ->
-                parts.forEach {
-                    it.text().ifPresent { outputChunk -> outputBuffer.append(outputChunk) }
-                }
-            }
 
+    private fun ProducerScope<GeminiLiveResponse>.processTurnComplete(
+        message: LiveServerMessage,
+        inputSTTBuffer: StringBuilder,
+        outputKrBuffer: StringBuilder,
+        outputJpBuffer: StringBuilder
+    ) {
         if (message.serverContent().flatMap { it.turnComplete() }.orElse(false)) {
             val finalInput = inputSTTBuffer.toString()
-            val finalOutput = outputBuffer.toString()
+            val finalKrOutput = outputKrBuffer.toString()
+            val finalJpOutput = outputJpBuffer.toString()
 
-            logger.debug { "서버가 대답을 완료했습니다. STT: [$finalInput], Response: [$finalOutput]" }
+            logger.debug { "서버가 대답을 완료했습니다. STT: [$finalInput], KrResponse: [$finalKrOutput], JpResponse: [$finalJpOutput]" }
 
-            if (finalInput.isNotEmpty() || finalOutput.isNotEmpty())
-                trySend(GeminiLiveResponse(finalInput, finalOutput))
+            if (finalInput.isNotEmpty() || finalKrOutput.isNotEmpty() || finalJpOutput.isNotEmpty()) {
+                val finalTextOutput = GeminiLiveTextResponse(finalKrOutput, finalJpOutput)
+                trySend(GeminiLiveResponse(finalInput, finalTextOutput))
+            }
 
             inputSTTBuffer.clear()
-            outputBuffer.clear()
+            outputKrBuffer.clear()
+            outputJpBuffer.clear()
         }
     }
+
+    private fun processFunctionCall(
+        message: LiveServerMessage,
+        outputKrBuffer: StringBuilder,
+        outputJpBuffer: StringBuilder
+    ) {
+        message.toolCall().getOrNull()?.functionCalls()?.ifPresent { call ->
+            call.map { Pair(it.name()?.get(), it.args()?.get()) }
+                .onEach { (name, items) ->
+                    logger.info { "함수 이름 : $name, items : $items" }
+                }
+                .forEach { (name, items) ->
+                    when (name) {
+                        GeminiFunctionTools.RESPONSE_TEXT -> {
+                            val responseChunk = runCatching {
+                                mapper.convertValue(items, GeminiLiveTextResponseChunk::class.java)
+                            }.getOrElse {
+                                logger.error(it) { "function params convert error" }
+                                return@forEach
+                            }
+                            outputKrBuffer.append(responseChunk.krText)
+                            outputJpBuffer.append(responseChunk.jpText)
+                        }
+                    }
+                }
+        }
+    }
+
 
     private suspend fun send(
         inputData: Flow<GeminiInput>,
@@ -137,6 +192,7 @@ class GeminiLiveClient(
         return RealtimeInputConfig.builder()
             .automaticActivityDetection(
                 AutomaticActivityDetection.builder()
+                    .startOfSpeechSensitivity(StartSensitivity.Known.START_SENSITIVITY_LOW)
                     .silenceDurationMs(config.silenceDurationMs)
             )
             .build()
@@ -146,7 +202,7 @@ class GeminiLiveClient(
         voiceChunk: ByteArray,
     ): LiveSendRealtimeInputParameters {
         return LiveSendRealtimeInputParameters.builder()
-            .audio(Blob.builder().mimeType("audio/pcm").data(voiceChunk))
+            .audio(Blob.builder().mimeType("audio/pcm;rate=16000").data(voiceChunk))
             .build()
     }
 
