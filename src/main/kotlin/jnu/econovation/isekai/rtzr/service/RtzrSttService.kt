@@ -26,7 +26,6 @@ class RtzrSttService(
 
     fun stt(
         voiceStream: Flow<ByteArray>,
-        scope: CoroutineScope,
         rtzrReadySignal: CompletableDeferred<Unit>
     ): Flow<RtzrSttResponse> {
         return flow {
@@ -35,7 +34,7 @@ class RtzrSttService(
 
             for (attempt in 1..TOTAL_ATTEMPTS) {
                 try {
-                    emitAll(client.stt(voiceStream, accessToken, scope, rtzrReadySignal))
+                    emitAll(client.stt(voiceStream, accessToken, rtzrReadySignal))
                     return@flow
                 } catch (e: DeploymentException) {
                     val is401Error = e.message?.contains("401") ?: false

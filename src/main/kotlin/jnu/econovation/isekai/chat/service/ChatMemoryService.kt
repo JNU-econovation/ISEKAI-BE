@@ -19,16 +19,16 @@ import jnu.econovation.isekai.chat.service.internal.LongTermMemoryDataService
 import jnu.econovation.isekai.common.exception.server.InternalServerException
 import jnu.econovation.isekai.gemini.client.GeminiClient
 import jnu.econovation.isekai.gemini.dto.client.request.GeminiInput
-import jnu.econovation.isekai.gemini.enums.GeminiModel
+import jnu.econovation.isekai.gemini.constant.enums.GeminiModel
 import jnu.econovation.isekai.member.constant.MemberConstants.MASTER_EMAIL
 import jnu.econovation.isekai.member.entity.Member
 import jnu.econovation.isekai.member.service.MemberService
 import jnu.econovation.isekai.persona.model.entity.Persona
 import jnu.econovation.isekai.persona.service.PersonaService
 import jnu.econovation.isekai.prompt.config.PromptConfig
+import jnu.econovation.isekai.rtzr.dto.client.response.RtzrSttResponse
 import jnu.econovation.isekai.rtzr.service.RtzrSttService
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -116,9 +116,10 @@ class ChatMemoryService(
         voiceChunk: Flow<ByteArray>,
         persona: Persona,
         hostMemberId: Long,
-        scope: CoroutineScope
     ): Flow<GeminiInput.Context> {
-        val sttResultFlow = rtzrSttService.stt(voiceChunk, scope, rtzrReadySignal)
+        val sttResultFlow: Flow<RtzrSttResponse> = rtzrSttService
+            .stt(voiceChunk, rtzrReadySignal)
+            .filter { it.final }
             .onEach { logger.info { "rtzr stt 결과 -> ${it.alternatives.first().text}" } }
 
         val (_, shortTermMemory) = getShortTermMemory(persona, hostMemberId)

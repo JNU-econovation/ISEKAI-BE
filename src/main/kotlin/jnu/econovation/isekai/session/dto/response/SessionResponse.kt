@@ -3,8 +3,8 @@ package jnu.econovation.isekai.session.dto.response
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import jnu.econovation.isekai.enums.MessageType
-import jnu.econovation.isekai.session.dto.internal.GeminiOutputDTO
 import jnu.econovation.isekai.session.dto.internal.ServerReadyDTO
+import jnu.econovation.isekai.session.dto.internal.SubtitleDTO
 
 @ConsistentCopyVisibility
 data class SessionResponse private constructor(
@@ -16,9 +16,10 @@ data class SessionResponse private constructor(
             return SessionResponse(MessageType.SERVER_READY, ServerReadyDTO())
         }
 
-        fun fromGeminiOutput(text: String): SessionResponse {
-            return SessionResponse(MessageType.GEMINI_OUTPUT, GeminiOutputDTO(text))
-        }
+        fun fromSubtitle(text: String): SessionResponse = SessionResponse(
+            MessageType.SUBTITLE,
+            SubtitleDTO(text)
+        )
     }
 }
 
@@ -29,6 +30,6 @@ data class SessionResponse private constructor(
 )
 @JsonSubTypes(
     JsonSubTypes.Type(value = ServerReadyDTO::class, name = "serverReady"),
-    JsonSubTypes.Type(value = GeminiOutputDTO::class, name = "geminiOutput")
+    JsonSubTypes.Type(value = SubtitleDTO::class, name = "subtitle"),
 )
 interface SessionResponseContent

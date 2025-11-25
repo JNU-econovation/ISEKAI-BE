@@ -8,6 +8,12 @@ spring:
       - classpath:config/application-gemini.yml
       - classpath:config/application-prompt.yml
       - classpath:config/application-rtzr.yml
+  threads:
+    virtual:
+      enabled: true
+
+ai-server:
+  web-socket-url: ${AI_SERVER_WEBSOCKET_URL}
 
 server:
   forward-headers-strategy: native

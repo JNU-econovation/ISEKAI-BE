@@ -117,7 +117,7 @@ class IsekAiSessionHandlerE2ETest(
 
             // 5. 마무리
             logger.info { "음성 스트리밍 끝!" }
-            delay(10000)
+            delay(20000)
             session.close()
         }
         logger.info { "음성 스트리밍 e2e 끝" }
@@ -144,8 +144,8 @@ class IsekAiSessionHandlerE2ETest(
                         readyLatch.complete(Unit)
                     }
 
-                    MessageType.GEMINI_OUTPUT -> {
-                        logger.info { "Gemini output 수신 -> ${response.content}" }
+                    MessageType.SUBTITLE -> {
+                        logger.info { "자막 수신 -> ${response.content}" }
                     }
                 }
             } catch (e: Exception) {

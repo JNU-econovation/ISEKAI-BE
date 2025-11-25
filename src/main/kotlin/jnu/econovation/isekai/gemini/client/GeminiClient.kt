@@ -5,7 +5,7 @@ import com.google.genai.Client
 import com.google.genai.types.*
 import jnu.econovation.isekai.common.exception.server.InternalServerException
 import jnu.econovation.isekai.gemini.config.GeminiConfig
-import jnu.econovation.isekai.gemini.enums.GeminiModel
+import jnu.econovation.isekai.gemini.constant.enums.GeminiModel
 import kotlinx.coroutines.future.await
 import org.springframework.stereotype.Component
 
