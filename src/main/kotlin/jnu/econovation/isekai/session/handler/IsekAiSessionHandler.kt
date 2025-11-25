@@ -1,18 +1,21 @@
 package jnu.econovation.isekai.session.handler
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import jnu.econovation.isekai.common.exception.server.InternalServerException
+import jnu.econovation.isekai.common.websocket.util.WebSocketReplier
 import jnu.econovation.isekai.session.constant.SessionConstant.FLOW_BUFFER_SIZE
-import jnu.econovation.isekai.session.event.ServerReadyEvent
+import jnu.econovation.isekai.session.dto.response.SessionResponse
+import jnu.econovation.isekai.session.factory.WebSocketSessionScopeFactory
 import jnu.econovation.isekai.session.registry.WebSocketSessionRegistry
 import jnu.econovation.isekai.session.service.IsekAiSessionService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import mu.KotlinLogging
-import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Component
 import org.springframework.web.socket.BinaryMessage
 import org.springframework.web.socket.CloseStatus
+import org.springframework.web.socket.TextMessage
 import org.springframework.web.socket.WebSocketSession
 import org.springframework.web.socket.handler.BinaryWebSocketHandler
 import kotlin.coroutines.cancellation.CancellationException
@@ -21,7 +24,7 @@ import kotlin.coroutines.cancellation.CancellationException
 @Component
 class IsekAiSessionHandler(
     private val service: IsekAiSessionService,
-    private val eventPublisher: ApplicationEventPublisher,
+    private val mapper: ObjectMapper,
     private val sessionRegistry: WebSocketSessionRegistry
 ) : BinaryWebSocketHandler() {
 
@@ -29,6 +32,7 @@ class IsekAiSessionHandler(
         const val CLIENT_VOICE_STREAM_KEY = "clientVoiceStream"
         const val SESSION_SCOPE_KEY = "sessionScope"
         const val PERSONA_ID_KEY = "personaId"
+        const val REPLIER_KEY = "replier"
 
         val logger = KotlinLogging.logger {}
     }
@@ -38,7 +42,7 @@ class IsekAiSessionHandler(
 
         sessionRegistry.register(session)
 
-        val webSocketSessionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val webSocketSessionScope: CoroutineScope = WebSocketSessionScopeFactory.create()
 
         val clientVoiceStream = MutableSharedFlow<ByteArray>(
             extraBufferCapacity = FLOW_BUFFER_SIZE,
@@ -47,39 +51,69 @@ class IsekAiSessionHandler(
 
         webSocketSessionScope.launch {
             val rtzrReadySignal = CompletableDeferred<Unit>()
+            val aiServerReadySignal = CompletableDeferred<Unit>()
 
             launch {
-                try {
-                    val personaId = session.attributes[PERSONA_ID_KEY] as? Long
-                        ?: throw InternalServerException(IllegalStateException("personaId is null"))
-
-                    service.processVoiceChunk(
-                        rtzrReadySignal,
-                        clientVoiceStream,
-                        personaId,
-                        session.id,
-                        webSocketSessionScope
-                    )
-                } catch (_: CancellationException) {
-                    logger.info { "세션 ${session.id} 처리가 정상적으로 취소되었습니다." }
-                } catch (e: Exception) {
-                    logger.error(e) { "voice chunk 처리 중 에러 -> ${session.id}" }
-                }
+                handleVoiceChunk(session, rtzrReadySignal, aiServerReadySignal, clientVoiceStream)
             }
 
-            rtzrReadySignal.await()
-
-            eventPublisher.publishEvent(ServerReadyEvent(source = this, sessionId = session.id))
-            logger.info { "클라이언트(${session.id})에게 준비 완료 신호 전송" }
+            launch {
+                awaitAndNotifyServerReady(rtzrReadySignal, aiServerReadySignal, session)
+            }
         }
 
         session.attributes[CLIENT_VOICE_STREAM_KEY] = clientVoiceStream
         session.attributes[SESSION_SCOPE_KEY] = webSocketSessionScope
+        val replier = WebSocketReplier(session, webSocketSessionScope)
+
+        session.attributes[REPLIER_KEY] = replier
+    }
+
+    private suspend fun handleVoiceChunk(
+        session: WebSocketSession,
+        rtzrReadySignal: CompletableDeferred<Unit>,
+        aiServerReadySignal: CompletableDeferred<Unit>,
+        clientVoiceStream: MutableSharedFlow<ByteArray>
+    ) {
+        try {
+            val personaId = session.attributes[PERSONA_ID_KEY] as? Long
+                ?: throw InternalServerException(IllegalStateException("personaId is null"))
+
+            service.processVoiceChunk(
+                rtzrReadySignal = rtzrReadySignal,
+                aiServerReadySignal = aiServerReadySignal,
+                voiceStream = clientVoiceStream,
+                personaId = personaId,
+                onVoiceChunk = replyVoiceChunk(session),
+                onSubtitle = replySubtitle(session)
+            )
+
+        } catch (_: CancellationException) {
+            logger.info { "세션 ${session.id} 처리가 정상적으로 취소되었습니다." }
+        } catch (e: Exception) {
+            logger.error(e) { "voice chunk 처리 중 에러 -> ${session.id}" }
+        }
+    }
+
+    private suspend fun awaitAndNotifyServerReady(
+        rtzrReadySignal: CompletableDeferred<Unit>,
+        aiServerReadySignal: CompletableDeferred<Unit>,
+        session: WebSocketSession
+    ) {
+        rtzrReadySignal.await()
+        aiServerReadySignal.await()
+
+        val response = SessionResponse.fromServerReady()
+        val payload = mapper.writeValueAsString(response)
+
+        session.sendMessage(TextMessage(payload))
+
+        logger.info { "세션 ID ${session.id}로 준비 완료 메시지 전송 완료" }
     }
 
     override fun handleBinaryMessage(session: WebSocketSession, message: BinaryMessage) {
-        val clientVoiceStream =
-            session.attributes[CLIENT_VOICE_STREAM_KEY] as? MutableSharedFlow<ByteArray>
+        val clientVoiceStream = session
+            .attributes[CLIENT_VOICE_STREAM_KEY] as? MutableSharedFlow<ByteArray>
 
         val bytes = ByteArray(message.payload.remaining())
         message.payload.get(bytes)
@@ -91,9 +125,53 @@ class IsekAiSessionHandler(
 
     override fun afterConnectionClosed(session: WebSocketSession, status: CloseStatus) {
         logger.info { "Client disconnected: ${session.id}. Cancelling session scope." }
-        val sessionScope = session.attributes[SESSION_SCOPE_KEY] as? CoroutineScope
-        sessionScope?.cancel()
+
+        (session.attributes[REPLIER_KEY] as? WebSocketReplier)?.close()
+
+        (session.attributes[SESSION_SCOPE_KEY] as? CoroutineScope)?.cancel()
+
         sessionRegistry.unregister(session.id)
     }
+
+    private fun replyVoiceChunk(session: WebSocketSession): suspend (ByteArray) -> Unit =
+        suspend@{ chunk ->
+            val replier = session.attributes[REPLIER_KEY] as? WebSocketReplier
+
+            val scope = session.attributes[SESSION_SCOPE_KEY] as? CoroutineScope
+
+            if (replier == null || scope == null) {
+                logger.warn { "Replier or Scope not found for session ${session.id}" }
+                return@suspend
+            }
+
+            scope.launch {
+                val result: Result<Unit> = replier.send(BinaryMessage(chunk))
+
+                if (result.isFailure)
+                    logger.warn(result.exceptionOrNull()) { "메세지 전송 실패 -> ${session.id}" }
+            }
+        }
+
+    private fun replySubtitle(session: WebSocketSession): suspend (String) -> Unit =
+        suspend@{ text ->
+            val replier = session.attributes[REPLIER_KEY] as? WebSocketReplier
+
+            val scope = session.attributes[SESSION_SCOPE_KEY] as? CoroutineScope
+
+            if (replier == null || scope == null) {
+                logger.warn { "Replier or Scope not found for session ${session.id}" }
+                return@suspend
+            }
+
+            val response = SessionResponse.fromSubtitle(text)
+
+            scope.launch {
+                val result: Result<Unit> = replier
+                    .send(TextMessage(mapper.writeValueAsString(response)))
+
+                if (result.isFailure)
+                    logger.warn(result.exceptionOrNull()) { "메세지 전송 실패 -> ${session.id}" }
+            }
+        }
 
 }
