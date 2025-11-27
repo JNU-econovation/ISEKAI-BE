@@ -31,10 +31,14 @@ class GeminiLiveClient(
 ) {
 
     companion object {
+        private const val API_VERSION = "v1alpha"
         private val logger = KotlinLogging.logger {}
     }
 
-    private val client = Client.builder().apiKey(config.apiKey).build()
+    private val client = Client.builder()
+        .apiKey(config.apiKey)
+        .httpOptions(HttpOptions.builder().apiVersion(API_VERSION).build())
+        .build()
 
     suspend fun getLiveResponse(
         sessionId: String,
@@ -122,6 +126,9 @@ class GeminiLiveClient(
         functionFlag: FunctionResponseFlag
     ) {
         if (message.serverContent().flatMap { it.turnComplete() }.orElse(false)) {
+            if (outputKrBuffer.isEmpty() && outputJpBuffer.isEmpty())
+                return
+
             val finalInputSTT = inputSTTBuffer.toString()
             val finalKrOutput = outputKrBuffer.toString()
             val finalJpOutput = outputJpBuffer.toString()
@@ -130,13 +137,13 @@ class GeminiLiveClient(
 
             functionFlag.handled = false
 
-            if (finalInputSTT.isNotEmpty() || finalKrOutput.isNotEmpty() || finalJpOutput.isNotEmpty()) {
-                trySend(
-                    GeminiLiveTurnCompleteResponse(
-                        finalInputSTT, finalKrOutput, finalJpOutput
-                    )
-                )
-            }
+            val response = GeminiLiveTurnCompleteResponse(
+                inputSTT = finalInputSTT,
+                krText = finalKrOutput,
+                jpText = finalJpOutput
+            )
+
+            trySend(element = response)
 
             inputSTTBuffer.clear()
             outputKrBuffer.clear()
