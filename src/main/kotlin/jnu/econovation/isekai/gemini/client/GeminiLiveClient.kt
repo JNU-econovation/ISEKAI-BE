@@ -7,11 +7,11 @@ import com.google.genai.Client
 import com.google.genai.types.*
 import jnu.econovation.isekai.common.exception.server.InternalServerException
 import jnu.econovation.isekai.gemini.config.GeminiConfig
-import jnu.econovation.isekai.gemini.dto.client.request.GeminiInput
-import jnu.econovation.isekai.gemini.dto.client.response.GeminiLiveResponse
 import jnu.econovation.isekai.gemini.constant.enums.GeminiModel
 import jnu.econovation.isekai.gemini.constant.function.GeminiTools
 import jnu.econovation.isekai.gemini.constant.function.GeminiTools.RESPONSE_TEXT
+import jnu.econovation.isekai.gemini.dto.client.request.GeminiInput
+import jnu.econovation.isekai.gemini.dto.client.response.GeminiLiveResponse
 import jnu.econovation.isekai.gemini.dto.client.response.GeminiLiveTextResponse
 import jnu.econovation.isekai.gemini.dto.client.response.GeminiLiveTurnCompleteResponse
 import kotlinx.coroutines.channels.ProducerScope
@@ -22,7 +22,6 @@ import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
-import kotlin.jvm.java
 import kotlin.jvm.optionals.getOrNull
 
 @Component
@@ -38,6 +37,7 @@ class GeminiLiveClient(
     private val client = Client.builder().apiKey(config.apiKey).build()
 
     suspend fun getLiveResponse(
+        sessionId: String,
         inputData: Flow<GeminiInput>,
         prompt: String,
         model: GeminiModel = GeminiModel.GEMINI_2_5_FLASH_NATIVE_AUDIO
@@ -56,13 +56,14 @@ class GeminiLiveClient(
                 val outputKrBuffer = StringBuilder()
                 val outputJpBuffer = StringBuilder()
 
-                session.receive {
+                session.receive { message ->
                     onMessageReceived(
-                        message = it,
-                        inputSTTBuffer,
-                        outputKrBuffer,
-                        outputJpBuffer,
-                        functionFlag
+                        sessionId = sessionId,
+                        message = message,
+                        inputSTTBuffer = inputSTTBuffer,
+                        outputKrBuffer = outputKrBuffer,
+                        outputJpBuffer = outputJpBuffer,
+                        functionFlag = functionFlag
                     )
                 }
                 launch { send(inputData, session) }
@@ -80,10 +81,12 @@ class GeminiLiveClient(
             .realtimeInputConfig(buildRealTimeInputConfig())
             .systemInstruction(Content.fromParts(Part.fromText(prompt)))
             .tools(ImmutableList.of(GeminiTools.GOOGLE_SEARCH_TOOL, GeminiTools.TEXT_RESPONSE_TOOL))
+            .proactivity(ProactivityConfig.builder().proactiveAudio(true).build())
             .build()
     }
 
     private fun ProducerScope<GeminiLiveResponse>.onMessageReceived(
+        sessionId: String,
         message: LiveServerMessage,
         inputSTTBuffer: StringBuilder,
         outputKrBuffer: StringBuilder,
@@ -94,9 +97,9 @@ class GeminiLiveClient(
 
         processInputSTT(message, inputSTTBuffer)
 
-        processTurnComplete(message, inputSTTBuffer, outputKrBuffer, outputJpBuffer, functionFlag)
+        processFunctionCall(sessionId, message, outputKrBuffer, outputJpBuffer, functionFlag)
 
-        processFunctionCall(message, outputKrBuffer, outputJpBuffer, functionFlag)
+        processTurnComplete(message, inputSTTBuffer, outputKrBuffer, outputJpBuffer, functionFlag)
     }
 
 
@@ -142,17 +145,18 @@ class GeminiLiveClient(
     }
 
     private fun ProducerScope<GeminiLiveResponse>.processFunctionCall(
+        sessionId: String,
         message: LiveServerMessage,
         outputKrBuffer: StringBuilder,
         outputJpBuffer: StringBuilder,
         functionFlag: FunctionResponseFlag
     ) {
-        if (functionFlag.handled) return
+        if (functionFlag.handled) return //함수 중복 호출 방어
 
         message.toolCall().getOrNull()?.functionCalls()?.ifPresent { call ->
             call.map { Triple(it.id()?.orElse(""), it.name()?.get(), it.args()?.get()) }
                 .onEach { (id, name, items) ->
-                    logger.info { "함수 id : $id, 함수 이름 : $name, items : $items" }
+                    logger.info { "[Session:$sessionId] 함수 수신됨 - 함수 id : $id, 함수 이름 : $name, items : $items" }
                 }
                 .forEach { (id, name, items) ->
                     when (name) {

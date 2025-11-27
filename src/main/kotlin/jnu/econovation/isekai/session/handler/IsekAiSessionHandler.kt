@@ -80,6 +80,7 @@ class IsekAiSessionHandler(
                 ?: throw InternalServerException(IllegalStateException("personaId is null"))
 
             service.processVoiceChunk(
+                sessionId = session.id,
                 rtzrReadySignal = rtzrReadySignal,
                 aiServerReadySignal = aiServerReadySignal,
                 voiceStream = clientVoiceStream,

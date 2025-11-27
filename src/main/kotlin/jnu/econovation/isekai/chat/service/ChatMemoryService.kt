@@ -107,6 +107,7 @@ class ChatMemoryService(
         if (count >= CONSOLIDATION_COUNT) {
             logger.info { "chatting count >= $CONSOLIDATION_COUNT -> consolidation 진행 중" }
             consolidate(persona, hostMember, counter)
+            counter.set(0)
         }
     }
 
