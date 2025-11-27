@@ -37,6 +37,7 @@ class IsekAiSessionService(
     }
 
     suspend fun processVoiceChunk(
+        sessionId: String,
         rtzrReadySignal: CompletableDeferred<Unit>,
         aiServerReadySignal: CompletableDeferred<Unit>,
         voiceStream: Flow<ByteArray>,
@@ -53,7 +54,9 @@ class IsekAiSessionService(
             persona = persona
         )
 
-        val geminiRawResponse = liveClient.getLiveResponse(geminiInputFlow, prompt)
+        val geminiRawResponse = liveClient
+            .getLiveResponse(sessionId, geminiInputFlow, prompt)
+            .shareIn(this, SharingStarted.Lazily)
 
         val turnCompleteJob = launch {
             handleTurnCompletion(geminiRawResponse, personaId)
