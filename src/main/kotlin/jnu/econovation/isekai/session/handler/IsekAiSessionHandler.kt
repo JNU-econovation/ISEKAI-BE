@@ -165,11 +165,10 @@ class IsekAiSessionHandler(
                 return@suspend
             }
 
-            scope.launch {
-                val result: Result<Unit> = replier.send(BinaryMessage(chunk))
+            val result: Result<Unit> = replier.send(BinaryMessage(chunk))
 
-                if (result.isFailure)
-                    logger.warn(result.exceptionOrNull()) { "메세지 전송 실패 -> ${session.id}" }
+            if (result.isFailure) {
+                logger.warn(result.exceptionOrNull()) { "메세지 전송 실패 -> ${session.id}" }
             }
         }
 
