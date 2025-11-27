@@ -6,11 +6,15 @@ import jnu.econovation.isekai.common.websocket.util.WebSocketReplier
 import jnu.econovation.isekai.session.constant.SessionConstant.FLOW_BUFFER_SIZE
 import jnu.econovation.isekai.session.dto.response.SessionResponse
 import jnu.econovation.isekai.session.factory.WebSocketSessionScopeFactory
+import jnu.econovation.isekai.session.optimizer.SessionOptimizer
 import jnu.econovation.isekai.session.registry.WebSocketSessionRegistry
 import jnu.econovation.isekai.session.service.IsekAiSessionService
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
 import org.springframework.web.socket.BinaryMessage
@@ -30,6 +34,7 @@ class IsekAiSessionHandler(
 
     private companion object {
         const val CLIENT_VOICE_STREAM_KEY = "clientVoiceStream"
+        const val OPTIMIZER_KEY = "optimizer"
         const val SESSION_SCOPE_KEY = "sessionScope"
         const val PERSONA_ID_KEY = "personaId"
         const val REPLIER_KEY = "replier"
@@ -61,6 +66,10 @@ class IsekAiSessionHandler(
                 awaitAndNotifyServerReady(rtzrReadySignal, aiServerReadySignal, session)
             }
         }
+
+        val optimizer = SessionOptimizer(session, webSocketSessionScope)
+        session.attributes[OPTIMIZER_KEY] = optimizer
+        optimizer.start()
 
         session.attributes[CLIENT_VOICE_STREAM_KEY] = clientVoiceStream
         session.attributes[SESSION_SCOPE_KEY] = webSocketSessionScope
@@ -116,8 +125,13 @@ class IsekAiSessionHandler(
         val clientVoiceStream = session
             .attributes[CLIENT_VOICE_STREAM_KEY] as? MutableSharedFlow<ByteArray>
 
+        val optimizer = session.attributes[OPTIMIZER_KEY] as? SessionOptimizer
+
         val bytes = ByteArray(message.payload.remaining())
+
         message.payload.get(bytes)
+
+        optimizer?.onAudioReceived(bytes)
 
         (session.attributes[SESSION_SCOPE_KEY] as? CoroutineScope)?.launch {
             clientVoiceStream?.emit(bytes)
@@ -126,6 +140,8 @@ class IsekAiSessionHandler(
 
     override fun afterConnectionClosed(session: WebSocketSession, status: CloseStatus) {
         logger.info { "Client disconnected: ${session.id}. Cancelling session scope." }
+
+        (session.attributes[OPTIMIZER_KEY] as? SessionOptimizer)?.stop()
 
         (session.attributes[REPLIER_KEY] as? WebSocketReplier)?.close()
 
@@ -139,6 +155,10 @@ class IsekAiSessionHandler(
             val replier = session.attributes[REPLIER_KEY] as? WebSocketReplier
 
             val scope = session.attributes[SESSION_SCOPE_KEY] as? CoroutineScope
+
+            val optimizer = session.attributes[OPTIMIZER_KEY] as? SessionOptimizer
+
+            optimizer?.extend()
 
             if (replier == null || scope == null) {
                 logger.warn { "Replier or Scope not found for session ${session.id}" }
@@ -158,6 +178,10 @@ class IsekAiSessionHandler(
             val replier = session.attributes[REPLIER_KEY] as? WebSocketReplier
 
             val scope = session.attributes[SESSION_SCOPE_KEY] as? CoroutineScope
+
+            val optimizer = session.attributes[OPTIMIZER_KEY] as? SessionOptimizer
+
+            optimizer?.extend()
 
             if (replier == null || scope == null) {
                 logger.warn { "Replier or Scope not found for session ${session.id}" }
