@@ -12,3 +12,8 @@ spring:
     port: ${PROD_REDIS_PORT}
     password: ${PROD_REDIS_PASSWORD}
     database: ${PROD_REDIS_DATABASE}
+
+  security.oauth2.client:
+    registration:
+      kakao:
+        redirect-uri: ${PROD_URL}/login/oauth2/code/kakao

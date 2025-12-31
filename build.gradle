@@ -34,6 +34,18 @@ dependencies {
     implementation 'org.springframework.retry:spring-retry'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 
+    //spring-security
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+
+    //jwt
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+    //aws s3 api
+    implementation 'io.awspring.cloud:spring-cloud-aws-starter-s3:3.4.2'
+
     //kotlin reflection
     implementation 'org.jetbrains.kotlin:kotlin-reflect'
 

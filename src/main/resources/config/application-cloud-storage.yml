@@ -1,0 +1,18 @@
+spring:
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 50MB
+
+  cloud:
+    aws:
+      s3:
+        enabled: false
+
+cloud-storage:
+  user: ${CLOUD_STORAGE_USER}
+  password: ${CLOUD_STORAGE_PASSWORD}
+  host: ${CLOUD_STORAGE_HOST}
+  port: ${CLOUD_STORAGE_PORT}
+  bucket: ${CLOUD_STORAGE_BUCKET_NAME}
+  region: ${CLOUD_STORAGE_REGION}
