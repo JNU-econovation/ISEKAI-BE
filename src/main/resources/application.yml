@@ -8,6 +8,7 @@ spring:
       - classpath:config/application-gemini.yml
       - classpath:config/application-prompt.yml
       - classpath:config/application-rtzr.yml
+      - classpath:config/application-cloud-storage.yml
   threads:
     virtual:
       enabled: true
