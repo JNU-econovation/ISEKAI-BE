@@ -3,7 +3,7 @@ package jnu.econovation.isekai.common.security.config
 import jnu.econovation.isekai.common.security.filter.JwtAuthFilter
 import jnu.econovation.isekai.common.security.filter.RedirectParamFilter
 import jnu.econovation.isekai.common.security.oauth.handler.OAuth2SuccessHandler
-import jnu.econovation.isekai.common.security.oauth.service.KioskOAuth2UserService
+import jnu.econovation.isekai.common.security.oauth.service.IsekAIOAuth2UserService
 import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -29,7 +29,7 @@ import org.springframework.web.filter.ForwardedHeaderFilter
 @EnableMethodSecurity
 class SecurityConfig(
     private val uriSecurityConfig: UriSecurityConfig,
-    private val oAuth2UserService: KioskOAuth2UserService,
+    private val oAuth2UserService: IsekAIOAuth2UserService,
     private val oAuth2SuccessHandler: OAuth2SuccessHandler,
     private val jwtAuthFilter: JwtAuthFilter,
     private val redirectParamFilter: RedirectParamFilter
