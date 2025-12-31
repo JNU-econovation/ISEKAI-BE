@@ -12,3 +12,8 @@ spring:
   data.redis:
     host: localhost
     port: 16379
+
+  security.oauth2.client:
+    registration:
+      kakao:
+        redirect-uri: ${DEV_URL}/login/oauth2/code/kakao
