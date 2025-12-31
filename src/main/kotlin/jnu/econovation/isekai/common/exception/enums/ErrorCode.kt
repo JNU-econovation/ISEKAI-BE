@@ -18,6 +18,7 @@ enum class ErrorCode(
         "페이징 가능한 필드가 아닙니다. -> %s = %s"
     ),
     BAD_DATA_MEANING(Domain.COMMON, HttpStatus.UNPROCESSABLE_ENTITY, 1, "%s"),
+    UNAUTHORIZED(Domain.COMMON, HttpStatus.UNAUTHORIZED, 1, "인증되지 않은 사용자 입니다."),
 
     NO_SUCH_PROMPT(Domain.PERSONA, HttpStatus.NOT_FOUND, 1, "존재하지 않는 프롬프트입니다.");
 
