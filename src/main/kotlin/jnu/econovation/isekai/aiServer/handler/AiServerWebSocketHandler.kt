@@ -1,6 +1,6 @@
 package jnu.econovation.isekai.aiServer.handler
 
-import jnu.econovation.isekai.aiServer.dto.response.AiServerTTSResponse
+import jnu.econovation.isekai.aiServer.dto.response.TTSResponse
 import kotlinx.coroutines.channels.SendChannel
 import org.springframework.web.socket.BinaryMessage
 import org.springframework.web.socket.CloseStatus
@@ -8,7 +8,7 @@ import org.springframework.web.socket.WebSocketSession
 import org.springframework.web.socket.handler.TextWebSocketHandler
 
 class AiServerWebSocketHandler(
-    private val aiServerChannel: SendChannel<AiServerTTSResponse>
+    private val aiServerChannel: SendChannel<TTSResponse>
 ) : TextWebSocketHandler() {
 
     private companion object {
@@ -26,7 +26,7 @@ class AiServerWebSocketHandler(
 
         if (message.payloadLength == 0) {
             aiServerChannel.trySend(
-                AiServerTTSResponse(isFinal = true, payload = ByteArray(0))
+                TTSResponse(isFinal = true, payload = ByteArray(0))
             )
             return
         }
@@ -35,7 +35,7 @@ class AiServerWebSocketHandler(
         buffer.get(bytes)
 
         aiServerChannel.trySend(
-            AiServerTTSResponse(isFinal = false, payload = bytes)
+            TTSResponse(isFinal = false, payload = bytes)
         )
     }
 

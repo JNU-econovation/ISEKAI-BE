@@ -15,6 +15,7 @@ spring:
 
 ai-server:
   web-socket-url: ${AI_SERVER_WEBSOCKET_URL}
+  rest-url: ${AI_SERVER_REST_URL}
 
 server:
   forward-headers-strategy: native

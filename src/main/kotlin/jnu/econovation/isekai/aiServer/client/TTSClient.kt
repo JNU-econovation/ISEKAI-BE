@@ -2,8 +2,8 @@ package jnu.econovation.isekai.aiServer.client
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import jnu.econovation.isekai.aiServer.config.AiServerConfig
-import jnu.econovation.isekai.aiServer.dto.request.AiServerTTSRequest
-import jnu.econovation.isekai.aiServer.dto.response.AiServerTTSResponse
+import jnu.econovation.isekai.aiServer.dto.request.TTSRequest
+import jnu.econovation.isekai.aiServer.dto.response.TTSResponse
 import jnu.econovation.isekai.aiServer.factory.AiServerWebSocketHandlerFactory
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.awaitClose
@@ -18,7 +18,7 @@ import org.springframework.web.socket.client.standard.StandardWebSocketClient
 import java.net.URI
 
 @Component
-class AiServerTTSClient(
+class TTSClient(
     private val config: AiServerConfig,
     private val handlerFactory: AiServerWebSocketHandlerFactory,
     private val mapper: ObjectMapper
@@ -30,9 +30,9 @@ class AiServerTTSClient(
     }
 
     suspend fun tts(
-        requestStream: Flow<AiServerTTSRequest>,
+        requestStream: Flow<TTSRequest>,
         aiServerReadySignal: CompletableDeferred<Unit>
-    ): Flow<AiServerTTSResponse> = channelFlow {
+    ): Flow<TTSResponse> = channelFlow {
         val handler = handlerFactory.createHandler(channel = this)
 
         val session = wsClient.execute(

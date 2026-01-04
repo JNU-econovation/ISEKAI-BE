@@ -9,9 +9,13 @@ import mu.KotlinLogging
 object WebSocketSessionScopeFactory {
     private val logger = KotlinLogging.logger {}
 
-    private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
-        logger.error(throwable) { "웹소켓 세션 스코프에서 처리되지 않은 예외 발생" }
-    }
+    fun create(onError: (Throwable) -> Unit): CoroutineScope {
+        val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+            logger.error(throwable) { "웹소켓 세션 스코프(Global)에서 예외 포착" }
 
-    fun create() = CoroutineScope(SupervisorJob() + Dispatchers.IO + exceptionHandler)
+            onError(throwable)
+        }
+
+        return CoroutineScope(SupervisorJob() + Dispatchers.IO + exceptionHandler)
+    }
 }

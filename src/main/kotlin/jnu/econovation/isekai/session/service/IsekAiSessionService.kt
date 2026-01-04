@@ -1,6 +1,6 @@
 package jnu.econovation.isekai.session.service
 
-import jnu.econovation.isekai.aiServer.dto.request.AiServerTTSRequest
+import jnu.econovation.isekai.aiServer.dto.request.TTSRequest
 import jnu.econovation.isekai.aiServer.service.AiServerTTSService
 import jnu.econovation.isekai.chat.dto.internal.ChatDTO
 import jnu.econovation.isekai.chat.service.ChatMemoryService
@@ -137,7 +137,7 @@ class IsekAiSessionService(
         }
 
         val ttsRequestStream = textResponseFlow
-            .map { AiServerTTSRequest(it.jpText) }
+            .map { TTSRequest(it.jpText) }
 
         val ttsAudioStream = aiServerTTSService
             .tts(ttsRequestStream, aiServerReadySignal)

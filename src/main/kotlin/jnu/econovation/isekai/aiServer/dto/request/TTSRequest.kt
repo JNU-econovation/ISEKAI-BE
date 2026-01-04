@@ -1,5 +1,5 @@
 package jnu.econovation.isekai.aiServer.dto.request
 
-data class AiServerTTSRequest(
+data class TTSRequest(
     val text: String
 )
