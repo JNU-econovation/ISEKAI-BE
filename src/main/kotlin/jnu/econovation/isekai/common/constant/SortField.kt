@@ -1,4 +1,4 @@
-package jnu.econovation.isekai.common.constant;
+package jnu.econovation.isekai.common.constant
 
 enum class SortField(
         val requestField: String,
