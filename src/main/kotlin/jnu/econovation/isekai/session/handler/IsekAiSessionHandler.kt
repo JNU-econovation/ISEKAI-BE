@@ -1,8 +1,10 @@
 package jnu.econovation.isekai.session.handler
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import jnu.econovation.isekai.common.exception.client.ClientException
+import jnu.econovation.isekai.common.exception.enums.ErrorCode
 import jnu.econovation.isekai.common.exception.server.InternalServerException
-import jnu.econovation.isekai.common.websocket.util.WebSocketReplier
+import jnu.econovation.isekai.session.constant.SessionConstant
 import jnu.econovation.isekai.session.constant.SessionConstant.FLOW_BUFFER_SIZE
 import jnu.econovation.isekai.session.dto.response.SessionResponse
 import jnu.econovation.isekai.session.factory.WebSocketSessionScopeFactory
@@ -22,6 +24,7 @@ import org.springframework.web.socket.CloseStatus
 import org.springframework.web.socket.TextMessage
 import org.springframework.web.socket.WebSocketSession
 import org.springframework.web.socket.handler.BinaryWebSocketHandler
+import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator
 import kotlin.coroutines.cancellation.CancellationException
 
 
@@ -37,7 +40,6 @@ class IsekAiSessionHandler(
         const val OPTIMIZER_KEY = "optimizer"
         const val SESSION_SCOPE_KEY = "sessionScope"
         const val PERSONA_ID_KEY = "personaId"
-        const val REPLIER_KEY = "replier"
 
         val logger = KotlinLogging.logger {}
     }
@@ -45,37 +47,42 @@ class IsekAiSessionHandler(
     override fun afterConnectionEstablished(session: WebSocketSession) {
         logger.info { "Connection established: ${session.id}" }
 
-        sessionRegistry.register(session)
+        val concurrentSession = ConcurrentWebSocketSessionDecorator(
+            session,
+            SessionConstant.SEND_TIME_LIMIT_MS,
+            SessionConstant.OUTGOING_BUFFER_SIZE_LIMIT
+        )
 
-        val webSocketSessionScope: CoroutineScope = WebSocketSessionScopeFactory.create()
+        sessionRegistry.register(concurrentSession)
+
+        val sessionScope: CoroutineScope = WebSocketSessionScopeFactory.create { throwable ->
+            sendErrorMessage(concurrentSession, throwable)
+        }
 
         val clientVoiceStream = MutableSharedFlow<ByteArray>(
             extraBufferCapacity = FLOW_BUFFER_SIZE,
             onBufferOverflow = BufferOverflow.DROP_OLDEST
         )
 
-        webSocketSessionScope.launch {
+        sessionScope.launch {
             val rtzrReadySignal = CompletableDeferred<Unit>()
             val aiServerReadySignal = CompletableDeferred<Unit>()
 
             launch {
-                handleVoiceChunk(session, rtzrReadySignal, aiServerReadySignal, clientVoiceStream)
+                handleVoiceChunk(concurrentSession, rtzrReadySignal, aiServerReadySignal, clientVoiceStream)
             }
 
             launch {
-                awaitAndNotifyServerReady(rtzrReadySignal, aiServerReadySignal, session)
+                awaitAndNotifyServerReady(rtzrReadySignal, aiServerReadySignal, concurrentSession)
             }
         }
 
-        val optimizer = SessionOptimizer(session, webSocketSessionScope)
-        session.attributes[OPTIMIZER_KEY] = optimizer
+        val optimizer = SessionOptimizer(concurrentSession, sessionScope)
+        concurrentSession.attributes[OPTIMIZER_KEY] = optimizer
         optimizer.start()
 
-        session.attributes[CLIENT_VOICE_STREAM_KEY] = clientVoiceStream
-        session.attributes[SESSION_SCOPE_KEY] = webSocketSessionScope
-        val replier = WebSocketReplier(session, webSocketSessionScope)
-
-        session.attributes[REPLIER_KEY] = replier
+        concurrentSession.attributes[CLIENT_VOICE_STREAM_KEY] = clientVoiceStream
+        concurrentSession.attributes[SESSION_SCOPE_KEY] = sessionScope
     }
 
     private suspend fun handleVoiceChunk(
@@ -102,23 +109,9 @@ class IsekAiSessionHandler(
             logger.info { "세션 ${session.id} 처리가 정상적으로 취소되었습니다." }
         } catch (e: Exception) {
             logger.error(e) { "voice chunk 처리 중 에러 -> ${session.id}" }
+
+            sendErrorMessage(session, e)
         }
-    }
-
-    private suspend fun awaitAndNotifyServerReady(
-        rtzrReadySignal: CompletableDeferred<Unit>,
-        aiServerReadySignal: CompletableDeferred<Unit>,
-        session: WebSocketSession
-    ) {
-        rtzrReadySignal.await()
-        aiServerReadySignal.await()
-
-        val response = SessionResponse.fromServerReady()
-        val payload = mapper.writeValueAsString(response)
-
-        session.sendMessage(TextMessage(payload))
-
-        logger.info { "세션 ID ${session.id}로 준비 완료 메시지 전송 완료" }
     }
 
     override fun handleBinaryMessage(session: WebSocketSession, message: BinaryMessage) {
@@ -143,59 +136,84 @@ class IsekAiSessionHandler(
 
         (session.attributes[OPTIMIZER_KEY] as? SessionOptimizer)?.stop()
 
-        (session.attributes[REPLIER_KEY] as? WebSocketReplier)?.close()
-
         (session.attributes[SESSION_SCOPE_KEY] as? CoroutineScope)?.cancel()
 
         sessionRegistry.unregister(session.id)
     }
 
+    override fun handleTransportError(session: WebSocketSession, exception: Throwable) {
+        logger.error(exception) { "전송 에러 발생: ${session.id}" }
+
+        try {
+            session.close(CloseStatus.SERVER_ERROR)
+        } catch (e: Exception) {
+            logger.error(e) { "session Close 실패: ${session.id}" }
+        }
+
+    }
+
+    private suspend fun awaitAndNotifyServerReady(
+        rtzrReadySignal: CompletableDeferred<Unit>,
+        aiServerReadySignal: CompletableDeferred<Unit>,
+        session: WebSocketSession
+    ) {
+        rtzrReadySignal.await()
+        aiServerReadySignal.await()
+
+        val response = SessionResponse.fromServerReady()
+        val payload = mapper.writeValueAsString(response)
+
+        session.sendMessage(TextMessage(payload))
+
+        logger.info { "세션 ID ${session.id}로 준비 완료 메시지 전송 완료" }
+    }
+
     private fun replyVoiceChunk(session: WebSocketSession): suspend (ByteArray) -> Unit =
         suspend@{ chunk ->
-            val replier = session.attributes[REPLIER_KEY] as? WebSocketReplier
-
-            val scope = session.attributes[SESSION_SCOPE_KEY] as? CoroutineScope
-
             val optimizer = session.attributes[OPTIMIZER_KEY] as? SessionOptimizer
 
             optimizer?.extend()
 
-            if (replier == null || scope == null) {
-                logger.warn { "Replier or Scope not found for session ${session.id}" }
-                return@suspend
-            }
-
-            val result: Result<Unit> = replier.send(BinaryMessage(chunk))
-
-            if (result.isFailure) {
-                logger.warn(result.exceptionOrNull()) { "메세지 전송 실패 -> ${session.id}" }
-            }
+            session.sendMessage(BinaryMessage(chunk))
         }
 
     private fun replySubtitle(session: WebSocketSession): suspend (String) -> Unit =
         suspend@{ text ->
-            val replier = session.attributes[REPLIER_KEY] as? WebSocketReplier
-
-            val scope = session.attributes[SESSION_SCOPE_KEY] as? CoroutineScope
-
             val optimizer = session.attributes[OPTIMIZER_KEY] as? SessionOptimizer
 
             optimizer?.extend()
 
-            if (replier == null || scope == null) {
-                logger.warn { "Replier or Scope not found for session ${session.id}" }
-                return@suspend
-            }
-
             val response = SessionResponse.fromSubtitle(text)
 
-            scope.launch {
-                val result: Result<Unit> = replier
-                    .send(TextMessage(mapper.writeValueAsString(response)))
-
-                if (result.isFailure)
-                    logger.warn(result.exceptionOrNull()) { "메세지 전송 실패 -> ${session.id}" }
-            }
+            session.sendMessage(TextMessage(mapper.writeValueAsString(response)))
         }
+
+    private fun sendErrorMessage(session: WebSocketSession, e: Throwable) {
+        runCatching {
+            val (errorResponse, serverError) = when (e) {
+                is ClientException -> {
+                    SessionResponse.fromError(e.errorCode) to false
+                }
+
+                else -> {
+                    SessionResponse.fromError(
+                        ErrorCode.INTERNAL_SERVER,
+                        "서버에서 예상치 못한 에러가 발생했습니다."
+                    ) to true
+                }
+            }
+
+            session.sendMessage(TextMessage(mapper.writeValueAsString(errorResponse)))
+
+            if (serverError) {
+                session.close(CloseStatus.SERVER_ERROR)
+            } else {
+                session.close(CloseStatus.BAD_DATA)
+            }
+
+        }.onFailure { sendEx ->
+            logger.error(sendEx) { "에러 메시지 전송 실패 (세션 ID: ${session.id})" }
+        }
+    }
 
 }
