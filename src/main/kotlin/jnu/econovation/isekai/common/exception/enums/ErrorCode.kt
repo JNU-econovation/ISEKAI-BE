@@ -1,7 +1,7 @@
-package jnu.econovation.isekai.common.exception.enums;
+package jnu.econovation.isekai.common.exception.enums
 
-import jnu.econovation.isekai.common.constant.Domain;
-import org.springframework.http.HttpStatus;
+import jnu.econovation.isekai.common.constant.Domain
+import org.springframework.http.HttpStatus
 
 enum class ErrorCode(
     private val domain: Domain,
@@ -28,6 +28,13 @@ enum class ErrorCode(
         HttpStatus.NOT_FOUND,
         1,
         "해당 파일이 존재하지 않습니다. UUID가 올바른지 확인해주세요."
+    ),
+
+    UNEXPECTED_FILE_SET(
+        Domain.CLOUD_STORAGE,
+        HttpStatus.BAD_REQUEST,
+        1,
+        "파일 구성이 올바르지 않습니다. -> %s"
     );
 
     fun getCode() = "${domain.name}_${status.value()}_%03d".format(number)

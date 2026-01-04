@@ -2,33 +2,45 @@ package jnu.econovation.isekai.common.s3.service
 
 import io.awspring.cloud.s3.S3Template
 import jnu.econovation.isekai.common.exception.server.InternalServerException
+import jnu.econovation.isekai.common.s3.config.CloudStorageConfig
 import jnu.econovation.isekai.common.s3.config.CloudStorageProperties
+import jnu.econovation.isekai.common.s3.dto.internal.PersistResultDTO
 import jnu.econovation.isekai.common.s3.dto.internal.PresignDTO
 import jnu.econovation.isekai.common.s3.dto.internal.PreviewDTO
+import jnu.econovation.isekai.common.s3.enums.FileName
 import jnu.econovation.isekai.common.s3.exception.NoSuchFileException
+import jnu.econovation.isekai.common.s3.exception.UnexpectedFileSetException
 import jnu.econovation.isekai.member.dto.internal.MemberInfoDTO
 import mu.KotlinLogging
 import org.springframework.stereotype.Service
+import software.amazon.awssdk.core.sync.RequestBody
 import software.amazon.awssdk.services.s3.S3Client
-import software.amazon.awssdk.services.s3.model.CopyObjectRequest
-import software.amazon.awssdk.services.s3.model.NoSuchKeyException
+import software.amazon.awssdk.services.s3.model.*
+import software.amazon.awssdk.services.s3.presigner.S3Presigner
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest
 import java.time.Duration
 import java.time.ZonedDateTime
 import java.util.*
 
 @Service
 class S3Service(
+    private val config: CloudStorageConfig,
     private val s3Template: S3Template,
+    private val s3Presigner: S3Presigner,
     private val s3Client: S3Client,
     private val properties: CloudStorageProperties
 ) {
     companion object {
-        private const val EXPIRATION_MINUTES = 10L
+        private const val EXPIRATION_MINUTES = 30L
         private val logger = KotlinLogging.logger {}
     }
 
-    fun generatePresignedPutUrl(memberInfo: MemberInfoDTO, uuid: UUID): PresignDTO {
-        val previewKey = getPreviewKey(memberInfo.id, uuid.toString())
+    fun generatePresignedPutUrl(
+        memberInfo: MemberInfoDTO,
+        uuid: UUID,
+        fileName: FileName
+    ): PresignDTO {
+        val previewKey = getPreviewKey(memberInfo.id, uuid, fileName)
         val expiration = Duration.ofMinutes(EXPIRATION_MINUTES)
         val expirationTime = ZonedDateTime.now().plus(expiration)
 
@@ -37,7 +49,7 @@ class S3Service(
 
             PresignDTO(
                 url = signedUrl.toString(),
-                fileName = uuid.toString(),
+                fileName = fileName,
                 expirationTime = expirationTime
             )
         } catch (e: Exception) {
@@ -46,13 +58,25 @@ class S3Service(
         }
     }
 
-    fun getPreviewUrl(memberInfo: MemberInfoDTO, uuid: UUID): PreviewDTO {
-        val previewKey = getPreviewKey(memberInfo.id, uuid.toString())
-        val url = s3Template.createSignedGetURL(
-            properties.bucket,
-            previewKey,
-            Duration.ofMinutes(EXPIRATION_MINUTES)
-        ).toString()
+    fun getPreviewUrl(
+        memberInfo: MemberInfoDTO,
+        uuid: UUID,
+        fileName: FileName
+    ): PreviewDTO {
+        val previewKey = getPreviewKey(memberInfo.id, uuid = uuid, fileName = fileName)
+
+        val getObjectRequest = GetObjectRequest.builder()
+            .bucket(properties.bucket)
+            .key(previewKey)
+            .build()
+
+        val presignRequest = GetObjectPresignRequest.builder()
+            .signatureDuration(Duration.ofMinutes(EXPIRATION_MINUTES))
+            .getObjectRequest(getObjectRequest)
+            .build()
+
+        val presignedRequest = s3Presigner.presignGetObject(presignRequest)
+        val url = presignedRequest.url().toString()
 
         return PreviewDTO(
             url = url,
@@ -61,41 +85,101 @@ class S3Service(
         )
     }
 
-    fun copyPreviewToPersisted(memberInfo: MemberInfoDTO, uuid: String): String {
-        val previewKey = getPreviewKey(memberInfo.id, uuid)
-        val persistenceKey = "${properties.persistenceDirectory}/${memberInfo.id}/$uuid.zip"
-        val copyRequest = CopyObjectRequest.builder()
-            .sourceBucket(properties.bucket)
-            .sourceKey(previewKey)
-            .destinationBucket(properties.bucket)
-            .destinationKey(persistenceKey)
+    fun uploadImageImmediately(
+        memberInfo: MemberInfoDTO,
+        uuid: UUID,
+        fileName: FileName,
+        image: ByteArray
+    ) {
+        val previewKey = getPreviewKey(memberInfo.id, uuid = uuid, fileName = fileName)
+        val request = PutObjectRequest.builder()
+            .bucket(properties.bucket)
+            .key(previewKey)
+            .contentType("image/${fileName.getExtensionValue()}")
             .build()
 
-        runCatching {
-            s3Client.copyObject(copyRequest)
-        }.onFailure { exception ->
-            when (exception) {
-                is NoSuchKeyException -> {
-                    throw NoSuchFileException()
-                }
-
-                else -> {
-                    logger.error(exception) { "S3 파일 복사 중 오류 발생: $previewKey" }
-                    throw InternalServerException(cause = exception)
-                }
-            }
-        }
-
-        runCatching {
-            s3Template.deleteObject(properties.bucket, previewKey)
-        }.onFailure { exception ->
-            logger.warn(exception) { "임시 파일 삭제 실패 (TTL에 의해 자동 삭제될 수 있음): $previewKey" }
-        }
-
-        return persistenceKey
+        s3Client.putObject(request, RequestBody.fromBytes(image))
     }
 
-    private fun getPreviewKey(memberId: Long, uuid: String): String {
-        return "${properties.previewDirectory}/$memberId/$uuid.zip"
+    fun copyPreviewToPersisted(
+        memberInfo: MemberInfoDTO,
+        uuid: UUID,
+        allOfFileName: List<FileName>
+    ): List<PersistResultDTO> {
+        validateAllFilesExist(memberInfo.id, uuid, allOfFileName)
+
+        val previewKeyPrefix = getPreviewKeyPrefix(memberInfo.id, uuid)
+        val persistenceKeyPrefix = "${properties.persistenceDirectory}/${memberInfo.id}/${uuid}/"
+
+        return allOfFileName.map { fileName ->
+            val sourceKey = "$previewKeyPrefix$fileName"
+            val destinationKey = "$persistenceKeyPrefix$fileName"
+
+            val copyRequest = CopyObjectRequest.builder()
+                .sourceBucket(properties.bucket)
+                .sourceKey(sourceKey)
+                .destinationBucket(properties.bucket)
+                .destinationKey(destinationKey)
+                .acl(ObjectCannedACL.PUBLIC_READ)
+                .build()
+
+            runCatching {
+                s3Client.copyObject(copyRequest)
+            }.onFailure { exception ->
+                when (exception) {
+                    is NoSuchKeyException -> throw NoSuchFileException()
+                    else -> {
+                        logger.error(exception) { "S3 파일 복사 중 오류 발생: $sourceKey" }
+                        throw InternalServerException(cause = exception)
+                    }
+                }
+            }
+
+            runCatching {
+                s3Template.deleteObject(properties.bucket, sourceKey)
+            }.onFailure { exception ->
+                logger.warn(exception) { "임시 파일 삭제 실패: $sourceKey" }
+            }
+
+            val fullUrl = "${config.endpointUrl}/${properties.bucket}/$destinationKey"
+
+            PersistResultDTO(fileName = fileName, url = fullUrl)
+        }
+    }
+
+    private fun validateAllFilesExist(
+        memberId: Long,
+        uuid: UUID,
+        expectedFileNames: List<FileName>
+    ) {
+        val prefix = getPreviewKeyPrefix(memberId, uuid)
+
+        val listRequest = ListObjectsV2Request.builder()
+            .bucket(properties.bucket)
+            .prefix(prefix)
+            .build()
+
+        val actualFileNames = s3Client.listObjectsV2(listRequest).contents()
+            .map { s3Object ->
+                s3Object.key().substringAfterLast("/")
+            }
+            .toSet()
+
+        val expectedSet = expectedFileNames.map { it.toString() }.toSet()
+
+        if (actualFileNames != expectedSet) {
+            logger.warn {
+                "파일 검증 실패! -> 기대값: $expectedSet, 실제값: $actualFileNames"
+            }
+            throw UnexpectedFileSetException(hint = "기대값: $expectedSet, 실제값: $actualFileNames")
+        }
+    }
+
+    private fun getPreviewKey(memberId: Long, uuid: UUID, fileName: FileName): String {
+        return "${getPreviewKeyPrefix(memberId, uuid)}$fileName"
+    }
+
+    private fun getPreviewKeyPrefix(memberId: Long, uuid: UUID): String {
+        return "${properties.previewDirectory}/$memberId/$uuid/"
     }
 }
