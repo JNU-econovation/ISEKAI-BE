@@ -6,7 +6,7 @@ import jakarta.websocket.ContainerProvider
 import jnu.econovation.isekai.Application
 import jnu.econovation.isekai.enums.MessageType
 import jnu.econovation.isekai.gemini.config.GeminiConfig
-import jnu.econovation.isekai.session.constant.SessionConstant.WEBSOCKET_BUFFER_SIZE
+import jnu.econovation.isekai.session.constant.SessionConstant.INCOMING_MESSAGE_SIZE_LIMIT
 import jnu.econovation.isekai.session.dto.response.SessionResponse
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
@@ -55,8 +55,8 @@ class IsekAiSessionHandlerE2ETest(
 
     private val client: WebSocketClient by lazy {
         val webSocketContainer = ContainerProvider.getWebSocketContainer()
-        webSocketContainer.defaultMaxBinaryMessageBufferSize = WEBSOCKET_BUFFER_SIZE
-        webSocketContainer.defaultMaxTextMessageBufferSize = WEBSOCKET_BUFFER_SIZE
+        webSocketContainer.defaultMaxBinaryMessageBufferSize = INCOMING_MESSAGE_SIZE_LIMIT
+        webSocketContainer.defaultMaxTextMessageBufferSize = INCOMING_MESSAGE_SIZE_LIMIT
         StandardWebSocketClient(webSocketContainer)
     }
 
@@ -146,6 +146,10 @@ class IsekAiSessionHandlerE2ETest(
 
                     MessageType.SUBTITLE -> {
                         logger.info { "자막 수신 -> ${response.content}" }
+                    }
+
+                    MessageType.ERROR -> {
+                        logger.info { "예외 수신 -> ${response.content}" }
                     }
                 }
             } catch (e: Exception) {
