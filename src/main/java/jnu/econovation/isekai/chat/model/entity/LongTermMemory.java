@@ -8,9 +8,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jnu.econovation.isekai.character.model.entity.Character;
 import jnu.econovation.isekai.common.entity.BaseEntity;
 import jnu.econovation.isekai.member.entity.Member;
-import jnu.econovation.isekai.persona.model.entity.Persona;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -33,8 +33,8 @@ public class LongTermMemory extends BaseEntity {
     private Member hostMember;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "persona_id", nullable = false)
-    private Persona persona;
+    @JoinColumn(name = "character_id", nullable = false)
+    private Character character;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String summary;
@@ -45,8 +45,8 @@ public class LongTermMemory extends BaseEntity {
     private float[] embedding;
 
     @Builder
-    LongTermMemory(Persona persona, Member hostMember, String summary, float[] embedding) {
-        this.persona = persona;
+    LongTermMemory(Character character, Member hostMember, String summary, float[] embedding) {
+        this.character = character;
         this.summary = summary;
         this.hostMember = hostMember;
         this.embedding = embedding;
