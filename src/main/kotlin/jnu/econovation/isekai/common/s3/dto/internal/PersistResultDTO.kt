@@ -1,10 +1,8 @@
 package jnu.econovation.isekai.common.s3.dto.internal
 
 import jnu.econovation.isekai.common.s3.enums.FileName
-import java.time.ZonedDateTime
 
-data class PresignDTO(
-    val url: String,
+data class PersistResultDTO(
     val fileName: FileName,
-    val expirationTime: ZonedDateTime
+    val url: String
 )

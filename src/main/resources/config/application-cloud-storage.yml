@@ -10,11 +10,11 @@ spring:
         enabled: false
 
 cloud-storage:
-  user: ${CLOUD_STORAGE_USER}
-  password: ${CLOUD_STORAGE_PASSWORD}
   host: ${CLOUD_STORAGE_HOST}
   port: ${CLOUD_STORAGE_PORT}
   bucket: ${CLOUD_STORAGE_BUCKET_NAME}
   region: ${CLOUD_STORAGE_REGION}
+  access-key: ${CLOUD_STORAGE_ACCESS_KEY}
+  secret-key: ${CLOUD_STORAGE_SECRET_KEY}
   preview-directory: temp
   persistence-directory: saved
