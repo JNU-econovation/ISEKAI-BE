@@ -20,7 +20,14 @@ enum class ErrorCode(
     BAD_DATA_MEANING(Domain.COMMON, HttpStatus.UNPROCESSABLE_ENTITY, 1, "%s"),
     UNAUTHORIZED(Domain.COMMON, HttpStatus.UNAUTHORIZED, 1, "인증되지 않은 사용자 입니다."),
 
-    NO_SUCH_PROMPT(Domain.PERSONA, HttpStatus.NOT_FOUND, 1, "존재하지 않는 프롬프트입니다.");
+    NO_SUCH_PROMPT(Domain.PERSONA, HttpStatus.NOT_FOUND, 1, "존재하지 않는 프롬프트입니다."),
+
+    NO_SUCH_FILE(
+        Domain.CLOUD_STORAGE,
+        HttpStatus.NOT_FOUND,
+        1,
+        "해당 파일이 존재하지 않습니다. UUID가 올바른지 확인해주세요."
+    );
 
     fun getCode() = "${domain.name}_${status.value()}_%03d".format(number)
 }
