@@ -1,4 +1,4 @@
-package jnu.econovation.isekai.storage.config
+package jnu.econovation.isekai.common.s3.config
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.awspring.cloud.s3.InMemoryBufferingS3OutputStreamProvider
