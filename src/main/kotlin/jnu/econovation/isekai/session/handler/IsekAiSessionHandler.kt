@@ -39,7 +39,7 @@ class IsekAiSessionHandler(
         const val CLIENT_VOICE_STREAM_KEY = "clientVoiceStream"
         const val OPTIMIZER_KEY = "optimizer"
         const val SESSION_SCOPE_KEY = "sessionScope"
-        const val PERSONA_ID_KEY = "personaId"
+        const val CHARACTER_ID_KEY = "characterId"
 
         val logger = KotlinLogging.logger {}
     }
@@ -92,7 +92,7 @@ class IsekAiSessionHandler(
         clientVoiceStream: MutableSharedFlow<ByteArray>
     ) {
         try {
-            val personaId = session.attributes[PERSONA_ID_KEY] as? Long
+            val personaId = session.attributes[CHARACTER_ID_KEY] as? Long
                 ?: throw InternalServerException(IllegalStateException("personaId is null"))
 
             service.processVoiceChunk(
