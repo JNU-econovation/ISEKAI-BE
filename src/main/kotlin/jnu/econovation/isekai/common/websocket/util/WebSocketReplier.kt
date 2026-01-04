@@ -7,6 +7,7 @@ import mu.KotlinLogging
 import org.springframework.web.socket.WebSocketMessage
 import org.springframework.web.socket.WebSocketSession
 
+@Deprecated("concurrentWebSocket 세션 데코레이터로 대체로 인한 deprecated")
 class WebSocketReplier(
     private val session: WebSocketSession,
     scope: CoroutineScope,
