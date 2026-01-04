@@ -5,7 +5,7 @@ import jnu.econovation.isekai.common.security.config.UriSecurityConfig
 import jnu.econovation.isekai.gemini.config.GeminiConfig
 import jnu.econovation.isekai.prompt.config.PromptConfig
 import jnu.econovation.isekai.rtzr.config.RtzrConfig
-import jnu.econovation.isekai.storage.config.CloudStorageProperties
+import jnu.econovation.isekai.common.s3.config.CloudStorageProperties
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication
