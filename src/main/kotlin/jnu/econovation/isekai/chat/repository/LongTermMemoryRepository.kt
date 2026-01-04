@@ -10,14 +10,14 @@ interface LongTermMemoryRepository : JpaRepository<LongTermMemory, Long> {
     @Query(
         value = """
             SELECT * FROM long_term_memory
-            WHERE persona_id = :personaId AND host_member_id = :hostMemberId
+            WHERE character_id = :characterId AND host_member_id = :hostMemberId
             ORDER BY embedding <-> CAST(:embedding AS vector)
             LIMIT :limit
         """,
         nativeQuery = true
     )
     fun findSimilarMemories(
-        personaId: Long,
+        characterId: Long?,
         hostMemberId: Long,
         embedding: FloatArray,
         limit: Int

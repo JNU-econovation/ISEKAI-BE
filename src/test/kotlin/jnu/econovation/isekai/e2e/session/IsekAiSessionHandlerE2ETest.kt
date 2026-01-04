@@ -46,12 +46,12 @@ class IsekAiSessionHandlerE2ETest(
 ) {
 
     private companion object {
-        const val PERSONA_ID = 1
+        const val CHARACTER_ID = 1
         val logger = KotlinLogging.logger {}
         val webSocketHeaders = WebSocketHttpHeaders()
     }
 
-    private val webSocketURI = URI("ws://localhost:${port}/websocket/voice?personaId=${PERSONA_ID}")
+    private val webSocketURI = URI("ws://localhost:${port}/websocket/voice?characterId=${CHARACTER_ID}")
 
     private val client: WebSocketClient by lazy {
         val webSocketContainer = ContainerProvider.getWebSocketContainer()

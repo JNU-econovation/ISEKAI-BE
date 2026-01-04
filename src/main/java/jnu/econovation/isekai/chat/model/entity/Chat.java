@@ -10,10 +10,11 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jnu.econovation.isekai.character.model.entity.Character;
+import jnu.econovation.isekai.character.model.vo.Persona;
 import jnu.econovation.isekai.common.entity.BaseEntity;
 import jnu.econovation.isekai.chat.model.vo.Speaker;
 import jnu.econovation.isekai.member.entity.Member;
-import jnu.econovation.isekai.persona.model.entity.Persona;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -33,8 +34,8 @@ public class Chat extends BaseEntity {
     private Member hostMember;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "persona_id", nullable = false)
-    private Persona persona;
+    @JoinColumn(name = "character_id", nullable = false)
+    private Character character;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -44,9 +45,9 @@ public class Chat extends BaseEntity {
     private String content;
 
     @Builder
-    Chat(Member hostMember, Persona persona, Speaker speaker, String content) {
+    Chat(Member hostMember, Character character, Speaker speaker, String content) {
         this.hostMember = hostMember;
-        this.persona = persona;
+        this.character = character;
         this.speaker = speaker;
         this.content = content;
     }

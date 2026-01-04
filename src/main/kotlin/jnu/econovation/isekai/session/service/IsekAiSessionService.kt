@@ -2,15 +2,16 @@ package jnu.econovation.isekai.session.service
 
 import jnu.econovation.isekai.aiServer.dto.request.TTSRequest
 import jnu.econovation.isekai.aiServer.service.AiServerTTSService
+import jnu.econovation.isekai.character.dto.internal.CharacterDTO
+import jnu.econovation.isekai.character.service.CharacterService
 import jnu.econovation.isekai.chat.dto.internal.ChatDTO
 import jnu.econovation.isekai.chat.service.ChatMemoryService
+import jnu.econovation.isekai.common.exception.server.InternalServerException
 import jnu.econovation.isekai.gemini.client.GeminiLiveClient
 import jnu.econovation.isekai.gemini.dto.client.request.GeminiInput
 import jnu.econovation.isekai.gemini.dto.client.response.GeminiLiveResponse
 import jnu.econovation.isekai.gemini.dto.client.response.GeminiLiveTextResponse
 import jnu.econovation.isekai.gemini.dto.client.response.GeminiLiveTurnCompleteResponse
-import jnu.econovation.isekai.persona.model.entity.Persona
-import jnu.econovation.isekai.persona.service.PersonaService
 import jnu.econovation.isekai.prompt.service.PromptService
 import jnu.econovation.isekai.session.constant.SessionConstant.FLOW_BUFFER_SIZE
 import kotlinx.coroutines.CompletableDeferred
@@ -28,9 +29,9 @@ import org.springframework.stereotype.Service
 class IsekAiSessionService(
     private val liveClient: GeminiLiveClient,
     private val memoryService: ChatMemoryService,
-    private val personaService: PersonaService,
     private val promptService: PromptService,
     private val aiServerTTSService: AiServerTTSService,
+    private val characterService: CharacterService
 ) {
     private companion object {
         val logger = KotlinLogging.logger {}
@@ -45,13 +46,15 @@ class IsekAiSessionService(
         onVoiceChunk: suspend (ByteArray) -> Unit,
         onSubtitle: suspend (String) -> Unit
     ) = supervisorScope {
-        val persona = personaService.getEntity(personaId)
-        val prompt = promptService.getPrompt(persona)
+        val characterDTO = characterService.getCharacter(personaId)
+            ?: throw InternalServerException(cause = IllegalStateException("캐릭터를 찾지 못함 -> $personaId"))
+
+        val prompt = promptService.getPrompt(characterDTO)
 
         val geminiInputFlow = createGeminiInputStream(
             voiceStream = voiceStream,
             rtzrReadySignal = rtzrReadySignal,
-            persona = persona
+            characterDTO = characterDTO
         )
 
         val geminiRawResponse = liveClient
@@ -59,7 +62,7 @@ class IsekAiSessionService(
             .shareIn(this, SharingStarted.Lazily)
 
         val turnCompleteJob = launch {
-            handleTurnCompletion(geminiRawResponse, personaId)
+            handleTurnCompletion(geminiRawResponse, characterDTO)
         }
 
         try {
@@ -77,7 +80,7 @@ class IsekAiSessionService(
     private suspend fun CoroutineScope.createGeminiInputStream(
         voiceStream: Flow<ByteArray>,
         rtzrReadySignal: CompletableDeferred<Unit>,
-        persona: Persona
+        characterDTO: CharacterDTO
     ): Flow<GeminiInput> {
         val sharedVoiceStream = voiceStream
             .buffer(capacity = FLOW_BUFFER_SIZE, onBufferOverflow = BufferOverflow.DROP_OLDEST)
@@ -89,7 +92,7 @@ class IsekAiSessionService(
             .findMemoriesFromVoiceStream(
                 rtzrReadySignal = rtzrReadySignal,
                 voiceChunk = sharedVoiceStream,
-                persona = persona,
+                characterDTO = characterDTO,
                 hostMemberId = 1L,
             )
             .filter { it.shortTermMemory.isNotEmpty() }
@@ -100,14 +103,14 @@ class IsekAiSessionService(
 
     private suspend fun handleTurnCompletion(
         geminiRawResponse: Flow<GeminiLiveResponse>,
-        personaId: Long
+        characterDTO: CharacterDTO
     ) {
         geminiRawResponse
             .filterIsInstance<GeminiLiveTurnCompleteResponse>()
             .collect { response ->
                 logger.info { "Turn complete. Saving memory." }
                 memoryService.save(
-                    personaId = personaId,
+                    characterDTO = characterDTO,
                     ChatDTO(input = response.inputSTT, output = response.krText)
                 )
             }

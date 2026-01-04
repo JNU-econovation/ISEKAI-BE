@@ -22,11 +22,11 @@ class WebSocketHandshakeInterceptor : HandshakeInterceptor {
         val requestUri = UriComponentsBuilder.fromUri(request.uri)
             .build()
 
-        attributes["personaId"] = requestUri
+        attributes["characterId"] = requestUri
             .queryParams
-            .getFirst("personaId")?.toLongOrNull() ?: return false
+            .getFirst("characterId")?.toLongOrNull() ?: return false
 
-        logger.info { "personaId: ${attributes["personaId"]}" }
+        logger.info { "characterId: ${attributes["characterId"]}" }
 
         return true
     }

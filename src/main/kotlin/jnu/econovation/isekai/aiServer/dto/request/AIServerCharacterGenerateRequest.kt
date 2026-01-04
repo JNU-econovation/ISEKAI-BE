@@ -1,6 +1,6 @@
 package jnu.econovation.isekai.aiServer.dto.request
 
-import jnu.econovation.isekai.character.dto.request.CharacterGenerateRequest
+import jnu.econovation.isekai.character.dto.request.GenerateCharacterRequest
 import jnu.econovation.isekai.common.s3.dto.internal.PresignDTO
 
 data class AIServerCharacterGenerateRequest(
@@ -10,13 +10,13 @@ data class AIServerCharacterGenerateRequest(
 ) {
     companion object {
         fun from(
-            characterGenerateRequest: CharacterGenerateRequest,
+            generateCharacterRequest: GenerateCharacterRequest,
             presignDTO: PresignDTO
         ): AIServerCharacterGenerateRequest {
             return AIServerCharacterGenerateRequest(
-                prompt = characterGenerateRequest.prompt,
+                prompt = generateCharacterRequest.prompt,
                 presignUrl = presignDTO.url,
-                fileName = presignDTO.fileName
+                fileName = presignDTO.fileName.toString()
             )
         }
     }

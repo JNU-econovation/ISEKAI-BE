@@ -1,8 +1,8 @@
 package jnu.econovation.isekai.chat.service.internal
 
+import jnu.econovation.isekai.character.dto.internal.CharacterDTO
 import jnu.econovation.isekai.chat.model.entity.Chat
 import jnu.econovation.isekai.chat.repository.ChatRepository
-import jnu.econovation.isekai.persona.model.entity.Persona
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -17,8 +17,8 @@ class ChatDataService(
     }
 
     @Transactional(readOnly = true)
-    fun getRecentChats(persona: Persona, hostMemberId: Long, limit: Int): List<Chat> {
-        return repository.findRecentChatsByHostMember(persona, hostMemberId, limit).reversed()
+    fun getRecentChats(characterDTO: CharacterDTO, hostMemberId: Long, limit: Int): List<Chat> {
+        return repository.findRecentChatsByHostMember(characterDTO.id, hostMemberId, limit).reversed()
     }
 
 }
