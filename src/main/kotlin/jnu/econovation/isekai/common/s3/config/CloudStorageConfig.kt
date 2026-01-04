@@ -18,12 +18,11 @@ import java.net.URI
 class CloudStorageConfig(
     private val properties: CloudStorageProperties
 ) {
-
-    private val endpointUrl: String
-        get() = if (properties.host.startsWith("http")) {
+    val endpointUrl: String
+        get() = if (properties.host.startsWith("https")) {
             "${properties.host}:${properties.port}"
         } else {
-            "http://${properties.host}:${properties.port}"
+            "https://${properties.host}:${properties.port}"
         }
 
     @Bean
@@ -32,7 +31,7 @@ class CloudStorageConfig(
             .region(Region.of(properties.region))
             .credentialsProvider(
                 StaticCredentialsProvider.create(
-                    AwsBasicCredentials.create(properties.user, properties.password)
+                    AwsBasicCredentials.create(properties.accessKey, properties.secretKey)
                 )
             )
             .endpointOverride(URI.create(endpointUrl))
@@ -50,7 +49,7 @@ class CloudStorageConfig(
             .region(Region.of(properties.region))
             .credentialsProvider(
                 StaticCredentialsProvider.create(
-                    AwsBasicCredentials.create(properties.user, properties.password)
+                    AwsBasicCredentials.create(properties.accessKey, properties.secretKey)
                 )
             )
             .endpointOverride(URI.create(endpointUrl))
