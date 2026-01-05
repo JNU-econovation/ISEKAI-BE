@@ -9,7 +9,6 @@ import jnu.econovation.isekai.gemini.constant.enums.GeminiModel
 import kotlinx.coroutines.future.await
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
-import software.amazon.awssdk.core.internal.waiters.ResponseOrException.response
 import kotlin.jvm.optionals.getOrNull
 
 
@@ -19,7 +18,24 @@ class GeminiClient(
     config: GeminiConfig
 ) {
     companion object {
+        const val IMAGE_RATIO = "16:9"
+        const val IMAGE_SIZE = "4K"
+
         private val logger = KotlinLogging.logger {}
+
+        private val imageConfig = GenerateContentConfig.builder()
+            .imageConfig(
+                ImageConfig.builder()
+                    .aspectRatio(IMAGE_RATIO)
+                    .imageSize(IMAGE_SIZE)
+                    .build()
+            )
+            .build()
+
+        private val embeddingConfig = EmbedContentConfig.builder()
+            .taskType("SEMANTIC_SIMILARITY")
+            .outputDimensionality(768)
+            .build()
     }
 
     private val client = Client.builder().apiKey(config.apiKey).build()
@@ -28,12 +44,7 @@ class GeminiClient(
         text: String,
         model: GeminiModel = GeminiModel.GEMINI_EMBEDDING_001
     ): List<ContentEmbedding> {
-        val config = EmbedContentConfig.builder()
-            .taskType("SEMANTIC_SIMILARITY")
-            .outputDimensionality(768)
-            .build()
-
-        val responseFuture = client.async.models.embedContent(model.toString(), text, config)
+        val responseFuture = client.async.models.embedContent(model.toString(), text, embeddingConfig)
         val response = responseFuture.await()
         val embeddings = response.embeddings()
 
@@ -72,7 +83,7 @@ class GeminiClient(
         val response = client.models.generateContent(
             model.toString(),
             userContent,
-            null
+            imageConfig
         )
 
         logger.debug { "image response -> $response" }
@@ -99,7 +110,6 @@ class GeminiClient(
         schema: Schema? = null,
         thinkingBudget: Int = -1
     ): GenerateContentConfig {
-
         val building = GenerateContentConfig.builder()
             .systemInstruction(systemInstruction)
             .candidateCount(1)
@@ -111,5 +121,4 @@ class GeminiClient(
 
         return building.build()
     }
-
 }

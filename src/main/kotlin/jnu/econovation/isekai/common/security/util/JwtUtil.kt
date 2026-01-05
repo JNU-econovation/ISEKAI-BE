@@ -1,12 +1,12 @@
 package jnu.econovation.isekai.common.security.util
 
+import io.jsonwebtoken.JwtException
 import io.jsonwebtoken.JwtParser
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
 import jakarta.annotation.PostConstruct
 import jnu.econovation.isekai.member.dto.internal.MemberInfoDTO
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.security.oauth2.jwt.JwtException
 import org.springframework.stereotype.Component
 import java.time.Duration
 import java.util.Date

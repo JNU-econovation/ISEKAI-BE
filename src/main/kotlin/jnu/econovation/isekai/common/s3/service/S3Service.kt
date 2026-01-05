@@ -147,6 +147,48 @@ class S3Service(
         }
     }
 
+    fun downloadPersistedFile(
+        memberInfo: MemberInfoDTO,
+        uuid: UUID,
+        fileName: FileName
+    ): ByteArray {
+        val key = getPersistenceKey(memberInfo.id, uuid, fileName)
+
+        val getRequest = GetObjectRequest.builder()
+            .bucket(properties.bucket)
+            .key(key)
+            .build()
+
+        return try {
+            s3Client.getObject(getRequest).readAllBytes()
+        } catch (e: Exception) {
+            logger.error(e) { "파일 다운로드 실패: $key" }
+            throw InternalServerException(cause = NoSuchFileException())
+        }
+    }
+
+    fun uploadPersistedFile(
+        memberInfo: MemberInfoDTO,
+        uuid: UUID,
+        fileName: FileName,
+        fileBytes: ByteArray
+    ): PersistResultDTO {
+        val key = getPersistenceKey(memberInfo.id, uuid, fileName)
+
+        val putRequest = PutObjectRequest.builder()
+            .bucket(properties.bucket)
+            .key(key)
+            .contentType("image/${fileName.getExtensionValue()}")
+            .acl(ObjectCannedACL.PUBLIC_READ)
+            .build()
+
+        s3Client.putObject(putRequest, RequestBody.fromBytes(fileBytes))
+
+        val url = "${config.endpointUrl}/${properties.bucket}/$key"
+
+        return PersistResultDTO(url = url, fileName = fileName)
+    }
+
     private fun validateAllFilesExist(
         memberId: Long,
         uuid: UUID,
@@ -181,5 +223,9 @@ class S3Service(
 
     private fun getPreviewKeyPrefix(memberId: Long, uuid: UUID): String {
         return "${properties.previewDirectory}/$memberId/$uuid/"
+    }
+
+    private fun getPersistenceKey(memberId: Long, uuid: UUID, fileName : FileName) : String {
+        return "${properties.persistenceDirectory}/$memberId/$uuid/$fileName"
     }
 }
