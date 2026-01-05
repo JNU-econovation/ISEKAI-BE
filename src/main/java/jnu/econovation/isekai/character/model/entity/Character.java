@@ -38,6 +38,9 @@ public class Character extends BaseEntity {
     private String backgroundUrl;
 
     @Column(nullable = false)
+    private String live2dModelNukkiUrl;
+
+    @Column(nullable = false)
     private String thumbnailUrl;
 
     @AttributeOverride(name = "value", column = @Column(name = "character_name", nullable = false))
@@ -54,6 +57,7 @@ public class Character extends BaseEntity {
             Member author,
             String live2dModelUrl,
             String backgroundUrl,
+            String live2dModelNukkiUrl,
             String thumbnailUrl,
             CharacterName name,
             Persona persona,
@@ -62,6 +66,7 @@ public class Character extends BaseEntity {
         this.author = author;
         this.live2dModelUrl = live2dModelUrl;
         this.backgroundUrl = backgroundUrl;
+        this.live2dModelNukkiUrl = live2dModelNukkiUrl;
         this.thumbnailUrl = thumbnailUrl;
         this.name = name;
         this.persona = persona;
