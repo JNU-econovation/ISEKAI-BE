@@ -2,4 +2,4 @@ package jnu.econovation.isekai.common.s3.exception
 
 import org.springframework.core.NestedRuntimeException
 
-class UnexpectedFileSetException(val hint: String) : NestedRuntimeException(hint)
+class FileDownloadFailedException(msg: String) : NestedRuntimeException(msg)
