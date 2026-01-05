@@ -3,7 +3,7 @@ package jnu.econovation.isekai.session.service
 import jnu.econovation.isekai.aiServer.dto.request.TTSRequest
 import jnu.econovation.isekai.aiServer.service.AiServerTTSService
 import jnu.econovation.isekai.character.dto.internal.CharacterDTO
-import jnu.econovation.isekai.character.service.CharacterService
+import jnu.econovation.isekai.character.service.CharacterCoordinateService
 import jnu.econovation.isekai.chat.dto.internal.ChatDTO
 import jnu.econovation.isekai.chat.service.ChatMemoryService
 import jnu.econovation.isekai.common.exception.server.InternalServerException
@@ -31,7 +31,7 @@ class IsekAiSessionService(
     private val memoryService: ChatMemoryService,
     private val promptService: PromptService,
     private val aiServerTTSService: AiServerTTSService,
-    private val characterService: CharacterService
+    private val characterService: CharacterCoordinateService
 ) {
     private companion object {
         val logger = KotlinLogging.logger {}

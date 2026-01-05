@@ -5,7 +5,7 @@ import jnu.econovation.isekai.character.dto.request.ConfirmCharacterRequest
 import jnu.econovation.isekai.character.dto.request.GenerateCharacterRequest
 import jnu.econovation.isekai.character.dto.response.GenerateBackgroundImageResponse
 import jnu.econovation.isekai.character.dto.response.GenerateCharacterResponse
-import jnu.econovation.isekai.character.service.CharacterService
+import jnu.econovation.isekai.character.service.CharacterCoordinateService
 import jnu.econovation.isekai.common.security.dto.internal.IsekAIUserDetails
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
@@ -18,7 +18,7 @@ import java.net.URI
 @RestController
 @RequestMapping("/characters")
 class CharacterController(
-    private val service: CharacterService
+    private val service: CharacterCoordinateService
 ) {
 
     @PostMapping("/live2d")

@@ -6,7 +6,7 @@ import com.google.genai.errors.ServerException
 import com.google.genai.types.Schema
 import com.google.genai.types.Type
 import jnu.econovation.isekai.character.dto.internal.CharacterDTO
-import jnu.econovation.isekai.character.service.CharacterService
+import jnu.econovation.isekai.character.service.CharacterCoordinateService
 import jnu.econovation.isekai.chat.constant.ChatConstants.CONSOLIDATION_COUNT
 import jnu.econovation.isekai.chat.constant.ChatConstants.LONG_TERM_MEMORY_LIMIT
 import jnu.econovation.isekai.chat.constant.ChatConstants.SHORT_TERM_MEMORY_SIZE
@@ -51,7 +51,7 @@ class ChatMemoryService(
     private val rtzrSttService: RtzrSttService,
     private val longTermMemoryService: LongTermMemoryDataService,
     private val memberService: MemberService,
-    private val characterService: CharacterService
+    private val characterService: CharacterCoordinateService
 ) {
 
     private companion object {
