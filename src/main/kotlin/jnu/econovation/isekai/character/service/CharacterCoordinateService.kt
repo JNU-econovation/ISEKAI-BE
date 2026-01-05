@@ -8,7 +8,9 @@ import jnu.econovation.isekai.character.dto.request.GenerateBackgroundImageReque
 import jnu.econovation.isekai.character.dto.request.GenerateCharacterRequest
 import jnu.econovation.isekai.character.dto.response.GenerateBackgroundImageResponse
 import jnu.econovation.isekai.character.dto.response.GenerateCharacterResponse
+import jnu.econovation.isekai.character.exception.IncompleteCharacterException
 import jnu.econovation.isekai.character.model.entity.Character
+import jnu.econovation.isekai.character.model.vo.CharacterName
 import jnu.econovation.isekai.character.model.vo.Persona
 import jnu.econovation.isekai.character.service.internal.CharacterDataService
 import jnu.econovation.isekai.common.exception.server.InternalServerException
@@ -16,6 +18,7 @@ import jnu.econovation.isekai.common.s3.dto.internal.PersistResultDTO
 import jnu.econovation.isekai.common.s3.dto.internal.PresignDTO
 import jnu.econovation.isekai.common.s3.dto.internal.PreviewDTO
 import jnu.econovation.isekai.common.s3.enums.FileName
+import jnu.econovation.isekai.common.s3.exception.UnexpectedFileSetException
 import jnu.econovation.isekai.common.s3.service.S3Service
 import jnu.econovation.isekai.gemini.client.GeminiClient
 import jnu.econovation.isekai.member.dto.internal.MemberInfoDTO
@@ -111,11 +114,15 @@ class CharacterCoordinateService(
     ): Long {
         val uuid = UUID.fromString(request.uuid)
 
-        val persistenceUrls: MutableList<PersistResultDTO> = s3Service.copyPreviewToPersisted(
-            memberInfo = memberInfo,
-            uuid = uuid,
-            allOfFileName = ALL_OF_BASE_NAME
-        ).toMutableList()
+        val persistenceUrls: MutableList<PersistResultDTO> = try {
+            s3Service.copyPreviewToPersisted(
+                memberInfo = memberInfo,
+                uuid = uuid,
+                allOfFileName = ALL_OF_BASE_NAME
+            )
+        } catch (_: UnexpectedFileSetException) {
+            throw IncompleteCharacterException()
+        }.toMutableList()
 
         val bgBytes = s3Service.downloadPersistedFile(
             memberInfo = memberInfo,
@@ -146,6 +153,7 @@ class CharacterCoordinateService(
         val characterBuilder: Character.CharacterBuilder = Character.builder()
             .author(author)
             .persona(Persona(request.persona))
+            .name(CharacterName(request.name))
             .isPublic(true)
 
         persistenceUrls.forEach { persistResultDTO ->
@@ -185,6 +193,7 @@ class CharacterCoordinateService(
 
         return dataService.findByIdAndIsPublic(id)
     }
+
 
     private fun mergeImages(bgBytes: ByteArray, nukkiBytes: ByteArray): ByteArray {
         return try {
