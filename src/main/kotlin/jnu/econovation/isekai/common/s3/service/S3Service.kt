@@ -8,7 +8,7 @@ import jnu.econovation.isekai.common.s3.dto.internal.PersistResultDTO
 import jnu.econovation.isekai.common.s3.dto.internal.PresignDTO
 import jnu.econovation.isekai.common.s3.dto.internal.PreviewDTO
 import jnu.econovation.isekai.common.s3.enums.FileName
-import jnu.econovation.isekai.common.s3.exception.NoSuchFileException
+import jnu.econovation.isekai.common.s3.exception.FileDownloadFailedException
 import jnu.econovation.isekai.common.s3.exception.UnexpectedFileSetException
 import jnu.econovation.isekai.member.dto.internal.MemberInfoDTO
 import mu.KotlinLogging
@@ -125,15 +125,7 @@ class S3Service(
 
             runCatching {
                 s3Client.copyObject(copyRequest)
-            }.onFailure { exception ->
-                when (exception) {
-                    is NoSuchKeyException -> throw NoSuchFileException()
-                    else -> {
-                        logger.error(exception) { "S3 파일 복사 중 오류 발생: $sourceKey" }
-                        throw InternalServerException(cause = exception)
-                    }
-                }
-            }
+            }.onFailure { exception -> throw InternalServerException(cause = exception) }
 
             runCatching {
                 s3Template.deleteObject(properties.bucket, sourceKey)
@@ -163,7 +155,7 @@ class S3Service(
             s3Client.getObject(getRequest).readAllBytes()
         } catch (e: Exception) {
             logger.error(e) { "파일 다운로드 실패: $key" }
-            throw InternalServerException(cause = NoSuchFileException())
+            throw InternalServerException(cause = FileDownloadFailedException("파일 다운로드 실패: $key"))
         }
     }
 
@@ -225,7 +217,7 @@ class S3Service(
         return "${properties.previewDirectory}/$memberId/$uuid/"
     }
 
-    private fun getPersistenceKey(memberId: Long, uuid: UUID, fileName : FileName) : String {
+    private fun getPersistenceKey(memberId: Long, uuid: UUID, fileName: FileName): String {
         return "${properties.persistenceDirectory}/$memberId/$uuid/$fileName"
     }
 }

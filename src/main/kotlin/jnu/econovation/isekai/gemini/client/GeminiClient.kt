@@ -76,7 +76,7 @@ class GeminiClient(
 
     fun getImageResponse(
         prompt: String,
-        model: GeminiModel = GeminiModel.NANO_BANANA
+        model: GeminiModel = GeminiModel.NANO_BANANA_PRO
     ): ByteArray {
         val userContent = Content.fromParts(Part.fromText(prompt))
 
