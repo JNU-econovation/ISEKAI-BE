@@ -8,6 +8,7 @@ import jnu.econovation.isekai.character.dto.request.GenerateBackgroundImageReque
 import jnu.econovation.isekai.character.dto.request.GenerateCharacterRequest
 import jnu.econovation.isekai.character.dto.response.GenerateBackgroundImageResponse
 import jnu.econovation.isekai.character.dto.response.GenerateCharacterResponse
+import jnu.econovation.isekai.character.exception.BadUUIDException
 import jnu.econovation.isekai.character.exception.IncompleteCharacterException
 import jnu.econovation.isekai.character.model.entity.Character
 import jnu.econovation.isekai.character.model.vo.CharacterName
@@ -43,7 +44,6 @@ class CharacterCoordinateService(
     companion object {
         private const val THUMBNAIL_IMAGE_SIZE = 1024
 
-
         private val ALL_OF_BASE_NAME = listOf(
             FileName.LIVE2D_MODEL_FILE_NAME,
             FileName.LIVE2D_MODEL_NUKKI_FILE_NAME,
@@ -57,13 +57,13 @@ class CharacterCoordinateService(
     ): GenerateCharacterResponse {
         val live2dModelPresign: PresignDTO = s3Service.generatePresignedPutUrl(
             memberInfo = memberInfo,
-            uuid = UUID.fromString(request.uuid),
+            uuid = request.uuid.toUUID(),
             fileName = FileName.LIVE2D_MODEL_FILE_NAME
         )
 
         val live2dModelNukkiPresign: PresignDTO = s3Service.generatePresignedPutUrl(
             memberInfo = memberInfo,
-            uuid = UUID.fromString(request.uuid),
+            uuid = request.uuid.toUUID(),
             fileName = FileName.LIVE2D_MODEL_NUKKI_FILE_NAME
         )
 
@@ -78,7 +78,7 @@ class CharacterCoordinateService(
 
         val previewDTO = s3Service.getPreviewUrl(
             memberInfo = memberInfo,
-            uuid = UUID.fromString(request.uuid),
+            uuid = request.uuid.toUUID(),
             fileName = FileName.LIVE2D_MODEL_FILE_NAME
         )
 
@@ -90,7 +90,7 @@ class CharacterCoordinateService(
         request: GenerateBackgroundImageRequest
     ): GenerateBackgroundImageResponse {
         val image: ByteArray = geminiClient.getImageResponse(request.prompt)
-        val uuid = UUID.fromString(request.uuid)
+        val uuid = request.uuid.toUUID()
 
         s3Service.uploadImageImmediately(
             memberInfo = memberInfo,
@@ -112,7 +112,7 @@ class CharacterCoordinateService(
         memberInfo: MemberInfoDTO,
         request: ConfirmCharacterRequest
     ): Long {
-        val uuid = UUID.fromString(request.uuid)
+        val uuid = request.uuid.toUUID()
 
         val persistenceUrls: MutableList<PersistResultDTO> = try {
             s3Service.copyPreviewToPersisted(
@@ -192,6 +192,12 @@ class CharacterCoordinateService(
         if (id == null) return null
 
         return dataService.findByIdAndIsPublic(id)
+    }
+
+    private fun String.toUUID(): UUID = try {
+        UUID.fromString(this)
+    } catch (_: Exception) {
+        throw BadUUIDException()
     }
 
 
