@@ -154,6 +154,7 @@ class CharacterCoordinateService(
             .author(author)
             .persona(Persona(request.persona))
             .name(CharacterName(request.name))
+            .voiceId(request.voiceId)
             .isPublic(true)
 
         persistenceUrls.forEach { persistResultDTO ->
