@@ -26,6 +26,7 @@ import jnu.econovation.isekai.member.dto.internal.MemberInfoDTO
 import jnu.econovation.isekai.member.entity.Member
 import jnu.econovation.isekai.member.service.MemberService
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
@@ -181,6 +182,7 @@ class CharacterCoordinateService(
         return dataService.save(characterBuilder.build())
     }
 
+    @Transactional(readOnly = true)
     fun getCharacter(id: Long?): CharacterDTO? {
         if (id == null) return null
 
@@ -189,6 +191,7 @@ class CharacterCoordinateService(
         return CharacterDTO.from(entity)
     }
 
+    @Transactional(readOnly = true)
     fun getCharacterEntity(id: Long?): Character? {
         if (id == null) return null
 
