@@ -54,7 +54,7 @@ class GeminiLiveClient(
 
                 val functionFlag = FunctionResponseFlag(false)
 
-                logger.debug { "Gemini Live 세션이 연결되었습니다." }
+                logger.info { "Gemini Live 세션이 연결되었습니다." }
 
                 val inputSTTBuffer = StringBuilder()
                 val outputKrBuffer = StringBuilder()
