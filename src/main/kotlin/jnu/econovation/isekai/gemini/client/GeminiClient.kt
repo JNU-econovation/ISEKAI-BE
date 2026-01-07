@@ -6,6 +6,7 @@ import com.google.genai.types.*
 import jnu.econovation.isekai.common.exception.server.InternalServerException
 import jnu.econovation.isekai.gemini.config.GeminiConfig
 import jnu.econovation.isekai.gemini.constant.enums.GeminiModel
+import jnu.econovation.isekai.gemini.constant.enums.GeminiModel.*
 import kotlinx.coroutines.future.await
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
@@ -21,9 +22,15 @@ class GeminiClient(
         const val IMAGE_RATIO = "16:9"
         const val IMAGE_SIZE = "4K"
 
-        private val logger = KotlinLogging.logger {}
+        private val nanoBananaConfig = GenerateContentConfig.builder()
+            .imageConfig(
+                ImageConfig.builder()
+                    .aspectRatio(IMAGE_RATIO)
+                    .build()
+            )
+            .build()
 
-        private val imageConfig = GenerateContentConfig.builder()
+        private val nanoBananaProConfig = GenerateContentConfig.builder()
             .imageConfig(
                 ImageConfig.builder()
                     .aspectRatio(IMAGE_RATIO)
@@ -31,6 +38,9 @@ class GeminiClient(
                     .build()
             )
             .build()
+
+        private val logger = KotlinLogging.logger {}
+
 
         private val embeddingConfig = EmbedContentConfig.builder()
             .taskType("SEMANTIC_SIMILARITY")
@@ -42,9 +52,10 @@ class GeminiClient(
 
     suspend fun getEmbedding(
         text: String,
-        model: GeminiModel = GeminiModel.GEMINI_EMBEDDING_001
+        model: GeminiModel = GEMINI_EMBEDDING_001
     ): List<ContentEmbedding> {
-        val responseFuture = client.async.models.embedContent(model.toString(), text, embeddingConfig)
+        val responseFuture =
+            client.async.models.embedContent(model.toString(), text, embeddingConfig)
         val response = responseFuture.await()
         val embeddings = response.embeddings()
 
@@ -55,7 +66,7 @@ class GeminiClient(
     suspend fun getTextResponse(
         prompt: String,
         request: Any,
-        model: GeminiModel = GeminiModel.GEMINI_2_5_FLASH,
+        model: GeminiModel = GEMINI_2_5_FLASH,
         schema: Schema? = null
     ): String {
         val systemInstruction = Content.fromParts(Part.fromText(prompt))
@@ -76,14 +87,14 @@ class GeminiClient(
 
     fun getImageResponse(
         prompt: String,
-        model: GeminiModel = GeminiModel.NANO_BANANA_PRO
+        model: GeminiModel = NANO_BANANA
     ): ByteArray {
         val userContent = Content.fromParts(Part.fromText(prompt))
 
         val response = client.models.generateContent(
             model.toString(),
             userContent,
-            imageConfig
+            buildImageConfig(model)
         )
 
         logger.debug { "image response -> $response" }
@@ -120,5 +131,13 @@ class GeminiClient(
                 .responseMimeType("application/json")
 
         return building.build()
+    }
+
+    private fun buildImageConfig(model: GeminiModel): GenerateContentConfig {
+        return when (model) {
+            NANO_BANANA -> nanoBananaConfig
+            NANO_BANANA_PRO -> nanoBananaProConfig
+            else -> throw InternalServerException(IllegalStateException("나노 바나나가 아닌 모델일 수 없음 -> ${model.toString()}"))
+        }
     }
 }
