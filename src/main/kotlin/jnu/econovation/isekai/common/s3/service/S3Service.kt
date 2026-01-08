@@ -4,7 +4,7 @@ import io.awspring.cloud.s3.S3Template
 import jnu.econovation.isekai.common.exception.server.InternalServerException
 import jnu.econovation.isekai.common.s3.config.CloudStorageConfig
 import jnu.econovation.isekai.common.s3.config.CloudStorageProperties
-import jnu.econovation.isekai.common.s3.dto.internal.PersistResultDTO
+import jnu.econovation.isekai.common.s3.dto.internal.PersistDTO
 import jnu.econovation.isekai.common.s3.dto.internal.PresignDTO
 import jnu.econovation.isekai.common.s3.dto.internal.PreviewDTO
 import jnu.econovation.isekai.common.s3.enums.FileName
@@ -18,9 +18,11 @@ import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.*
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest
+import java.net.URI
 import java.time.Duration
 import java.time.ZonedDateTime
 import java.util.*
+import java.util.concurrent.CompletableFuture
 
 @Service
 class S3Service(
@@ -31,7 +33,7 @@ class S3Service(
     private val properties: CloudStorageProperties
 ) {
     companion object {
-        private const val EXPIRATION_MINUTES = 30L
+        private const val EXPIRATION_MINUTES = 60L
         private val logger = KotlinLogging.logger {}
     }
 
@@ -105,37 +107,36 @@ class S3Service(
         memberInfo: MemberInfoDTO,
         uuid: UUID,
         allOfFileName: List<FileName>
-    ): List<PersistResultDTO> {
+    ): Result<List<PersistDTO>> {
         validateAllFilesExist(memberInfo.id, uuid, allOfFileName)
 
         val previewKeyPrefix = getPreviewKeyPrefix(memberInfo.id, uuid)
         val persistenceKeyPrefix = "${properties.persistenceDirectory}/${memberInfo.id}/${uuid}/"
+        val succeedUrls = mutableListOf<String>()
 
-        return allOfFileName.map { fileName ->
-            val sourceKey = "$previewKeyPrefix$fileName"
-            val destinationKey = "$persistenceKeyPrefix$fileName"
+        return runCatching {
+            allOfFileName.map { fileName ->
+                val sourceKey = "$previewKeyPrefix$fileName"
+                val destinationKey = "$persistenceKeyPrefix$fileName"
 
-            val copyRequest = CopyObjectRequest.builder()
-                .sourceBucket(properties.bucket)
-                .sourceKey(sourceKey)
-                .destinationBucket(properties.bucket)
-                .destinationKey(destinationKey)
-                .acl(ObjectCannedACL.PUBLIC_READ)
-                .build()
+                val copyRequest = CopyObjectRequest.builder()
+                    .sourceBucket(properties.bucket)
+                    .sourceKey(sourceKey)
+                    .destinationBucket(properties.bucket)
+                    .destinationKey(destinationKey)
+                    .acl(ObjectCannedACL.PUBLIC_READ)
+                    .build()
 
-            runCatching {
                 s3Client.copyObject(copyRequest)
-            }.onFailure { exception -> throw InternalServerException(cause = exception) }
 
-            runCatching {
-                s3Template.deleteObject(properties.bucket, sourceKey)
-            }.onFailure { exception ->
-                logger.warn(exception) { "임시 파일 삭제 실패: $sourceKey" }
+                val fullUrl = "${config.endpointUrl}/${properties.bucket}/$destinationKey"
+                succeedUrls.add(fullUrl)
+
+                PersistDTO(fileName = fileName, url = fullUrl)
             }
-
-            val fullUrl = "${config.endpointUrl}/${properties.bucket}/$destinationKey"
-
-            PersistResultDTO(fileName = fileName, url = fullUrl)
+        }.onFailure { exception ->
+            CompletableFuture.runAsync {  succeedUrls.forEach { delete(it) } }
+            logger.error(exception) { "S3 복사 작업 중 에러 발생 - 정리 완료: $succeedUrls" }
         }
     }
 
@@ -164,7 +165,7 @@ class S3Service(
         uuid: UUID,
         fileName: FileName,
         fileBytes: ByteArray
-    ): PersistResultDTO {
+    ): PersistDTO {
         val key = getPersistenceKey(memberInfo.id, uuid, fileName)
 
         val putRequest = PutObjectRequest.builder()
@@ -178,7 +179,16 @@ class S3Service(
 
         val url = "${config.endpointUrl}/${properties.bucket}/$key"
 
-        return PersistResultDTO(url = url, fileName = fileName)
+        return PersistDTO(url = url, fileName = fileName)
+    }
+
+    fun delete(url: String) {
+        runCatching {
+            val key = URI(url).path.removePrefix("/")
+            s3Template.deleteObject(properties.bucket, key)
+        }.onFailure { exception ->
+            logger.error(exception) { "S3 파일 삭제 실패: $url" }
+        }
     }
 
     private fun validateAllFilesExist(
