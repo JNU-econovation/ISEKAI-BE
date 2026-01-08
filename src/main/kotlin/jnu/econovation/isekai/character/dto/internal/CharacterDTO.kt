@@ -13,7 +13,7 @@ data class CharacterDTO(
     val thumbnailUrl: String,
     val name: CharacterName,
     val persona: Persona,
-    val voiceId: String,
+    val voiceId: Long,
     val isPublic: Boolean
 ) {
     companion object {

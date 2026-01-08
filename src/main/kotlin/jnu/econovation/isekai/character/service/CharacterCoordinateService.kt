@@ -6,16 +6,19 @@ import jnu.econovation.isekai.character.dto.internal.CharacterDTO
 import jnu.econovation.isekai.character.dto.request.ConfirmCharacterRequest
 import jnu.econovation.isekai.character.dto.request.GenerateBackgroundImageRequest
 import jnu.econovation.isekai.character.dto.request.GenerateCharacterRequest
+import jnu.econovation.isekai.character.dto.response.CharacterResponse
 import jnu.econovation.isekai.character.dto.response.GenerateBackgroundImageResponse
 import jnu.econovation.isekai.character.dto.response.GenerateCharacterResponse
 import jnu.econovation.isekai.character.exception.BadUUIDException
 import jnu.econovation.isekai.character.exception.IncompleteCharacterException
+import jnu.econovation.isekai.character.exception.NoSuchCharacterException
+import jnu.econovation.isekai.character.exception.YouAreNotAuthorException
 import jnu.econovation.isekai.character.model.entity.Character
 import jnu.econovation.isekai.character.model.vo.CharacterName
 import jnu.econovation.isekai.character.model.vo.Persona
 import jnu.econovation.isekai.character.service.internal.CharacterDataService
 import jnu.econovation.isekai.common.exception.server.InternalServerException
-import jnu.econovation.isekai.common.s3.dto.internal.PersistResultDTO
+import jnu.econovation.isekai.common.s3.dto.internal.PersistDTO
 import jnu.econovation.isekai.common.s3.dto.internal.PresignDTO
 import jnu.econovation.isekai.common.s3.dto.internal.PreviewDTO
 import jnu.econovation.isekai.common.s3.enums.FileName
@@ -25,6 +28,8 @@ import jnu.econovation.isekai.gemini.client.GeminiClient
 import jnu.econovation.isekai.member.dto.internal.MemberInfoDTO
 import jnu.econovation.isekai.member.entity.Member
 import jnu.econovation.isekai.member.service.MemberService
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.awt.RenderingHints
@@ -32,6 +37,7 @@ import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.*
+import java.util.concurrent.CompletableFuture
 import javax.imageio.ImageIO
 
 @Service
@@ -115,87 +121,119 @@ class CharacterCoordinateService(
     ): Long {
         val uuid = request.uuid.toUUID()
 
-        val persistenceUrls: MutableList<PersistResultDTO> = try {
-            s3Service.copyPreviewToPersisted(
+        val persistence: MutableList<PersistDTO> = s3Service
+            .copyPreviewToPersisted(memberInfo, uuid, ALL_OF_BASE_NAME)
+            .fold(
+                onSuccess = { it.toMutableList() },
+                onFailure = {
+                    throw when (it) {
+                        is UnexpectedFileSetException -> IncompleteCharacterException()
+                        else -> it
+                    }
+                }
+            )
+
+        return try {
+            val backgroundImage: ByteArray = s3Service.downloadPersistedFile(
                 memberInfo = memberInfo,
                 uuid = uuid,
-                allOfFileName = ALL_OF_BASE_NAME
+                fileName = FileName.BACKGROUND_IMAGE_FILE_NAME
             )
-        } catch (_: UnexpectedFileSetException) {
-            throw IncompleteCharacterException()
-        }.toMutableList()
 
-        val bgBytes = s3Service.downloadPersistedFile(
-            memberInfo = memberInfo,
-            uuid = uuid,
-            fileName = FileName.BACKGROUND_IMAGE_FILE_NAME
-        )
+            val nukkiImage: ByteArray = s3Service.downloadPersistedFile(
+                memberInfo = memberInfo,
+                uuid = uuid,
+                fileName = FileName.LIVE2D_MODEL_NUKKI_FILE_NAME
+            )
 
-        val nukkiBytes = s3Service.downloadPersistedFile(
-            memberInfo = memberInfo,
-            uuid = uuid,
-            fileName = FileName.LIVE2D_MODEL_NUKKI_FILE_NAME
-        )
+            val thumbnailImage: ByteArray = mergeImages(backgroundImage, nukkiImage)
 
-        val thumbnailBytes = mergeImages(bgBytes, nukkiBytes)
+            val thumbnailUrl: PersistDTO = s3Service.uploadPersistedFile(
+                memberInfo = memberInfo,
+                uuid = uuid,
+                fileName = FileName.THUMBNAIL_IMAGE_FILE_NAME,
+                fileBytes = thumbnailImage
+            )
 
-        val thumbnailUrl: PersistResultDTO = s3Service.uploadPersistedFile(
-            memberInfo = memberInfo,
-            uuid = uuid,
-            fileName = FileName.THUMBNAIL_IMAGE_FILE_NAME,
-            fileBytes = thumbnailBytes
-        )
+            persistence.add(thumbnailUrl)
 
-        persistenceUrls.add(thumbnailUrl)
+            val author: Member = memberService.getEntity(memberInfo.id)
+                ?: throw InternalServerException(cause = IllegalStateException("회원을 찾지 못함 -> $memberInfo"))
 
-        val author: Member = memberService.getEntity(memberInfo.id)
-            ?: throw InternalServerException(cause = IllegalStateException("회원을 찾지 못함 -> $memberInfo"))
+            val characterBuilder: Character.CharacterBuilder = Character.builder()
+                .author(author)
+                .persona(Persona(request.persona))
+                .name(CharacterName(request.name))
+                .voiceId(request.voiceId)
+                .isPublic(true)
 
-        val characterBuilder: Character.CharacterBuilder = Character.builder()
-            .author(author)
-            .persona(Persona(request.persona))
-            .name(CharacterName(request.name))
-            .voiceId(request.voiceId)
-            .isPublic(true)
+            persistence.forEach { persistResultDTO ->
+                when (persistResultDTO.fileName) {
+                    FileName.LIVE2D_MODEL_FILE_NAME -> {
+                        characterBuilder.live2dModelUrl(persistResultDTO.url)
+                    }
 
-        persistenceUrls.forEach { persistResultDTO ->
-            when (persistResultDTO.fileName) {
-                FileName.LIVE2D_MODEL_FILE_NAME -> {
-                    characterBuilder.live2dModelUrl(persistResultDTO.url)
-                }
+                    FileName.BACKGROUND_IMAGE_FILE_NAME -> {
+                        characterBuilder.backgroundUrl(persistResultDTO.url)
+                    }
 
-                FileName.BACKGROUND_IMAGE_FILE_NAME -> {
-                    characterBuilder.backgroundUrl(persistResultDTO.url)
-                }
+                    FileName.LIVE2D_MODEL_NUKKI_FILE_NAME -> {
+                        characterBuilder.live2dModelNukkiUrl(persistResultDTO.url)
+                    }
 
-                FileName.LIVE2D_MODEL_NUKKI_FILE_NAME -> {
-                    characterBuilder.live2dModelNukkiUrl(persistResultDTO.url)
-                }
-
-                FileName.THUMBNAIL_IMAGE_FILE_NAME -> {
-                    characterBuilder.thumbnailUrl(persistResultDTO.url)
+                    FileName.THUMBNAIL_IMAGE_FILE_NAME -> {
+                        characterBuilder.thumbnailUrl(persistResultDTO.url)
+                    }
                 }
             }
-        }
 
-        //@Transactional
-        return dataService.save(characterBuilder.build())
+            //@Transactional
+            dataService.save(characterBuilder.build())
+        } catch (e: Exception) {
+            //보상 트랜잭션
+            CompletableFuture.runAsync {
+                persistence.forEach { s3Service.delete(it.url) }
+            }
+
+            throw (e)
+        }
     }
 
     @Transactional(readOnly = true)
-    fun getCharacter(id: Long?): CharacterDTO? {
-        if (id == null) return null
-
+    fun getCharacter(id: Long): CharacterDTO? {
         val entity = getCharacterEntity(id) ?: return null
 
         return CharacterDTO.from(entity)
     }
 
     @Transactional(readOnly = true)
-    fun getCharacterEntity(id: Long?): Character? {
+    fun getCharacterList(memberInfo: MemberInfoDTO, pageable: Pageable): Page<CharacterResponse> {
+        return dataService.findAllByIsPublic(pageable)
+            .map { CharacterDTO.from(it) }
+            .map { CharacterResponse.from(viewerId = memberInfo.id, characterDTO = it) }
+    }
+
+    @Transactional(readOnly = true)
+    fun getCharacterForResponse(memberInfo: MemberInfoDTO, id: Long): CharacterResponse {
+        val characterDTO: CharacterDTO = getCharacter(id) ?: throw NoSuchCharacterException()
+
+        return CharacterResponse.from(viewerId = memberInfo.id, characterDTO = characterDTO)
+    }
+
+    @Transactional(readOnly = true)
+    internal fun getCharacterEntity(id: Long?): Character? {
         if (id == null) return null
 
         return dataService.findByIdAndIsPublic(id)
+    }
+
+    @Transactional
+    fun delete(memberInfo: MemberInfoDTO, id: Long) {
+        val authorId = getCharacterEntity(id)?.author?.id ?: throw NoSuchCharacterException()
+
+        if (authorId != memberInfo.id) throw YouAreNotAuthorException()
+
+        dataService.deleteById(id)
     }
 
     private fun String.toUUID(): UUID = try {

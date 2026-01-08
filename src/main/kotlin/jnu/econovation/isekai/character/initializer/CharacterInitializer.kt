@@ -10,10 +10,8 @@ import jnu.econovation.isekai.member.constant.MemberConstants.MASTER_EMAIL
 import jnu.econovation.isekai.member.event.MemberInitializedEvent
 import jnu.econovation.isekai.member.repository.MemberRepository
 import mu.KotlinLogging
-import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.annotation.Profile
 import org.springframework.context.event.EventListener
-import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 
@@ -33,7 +31,7 @@ class CharacterInitializer(
                 ?: throw InternalServerException(cause = IllegalStateException("master member not found"))
 
             val character = Character.builder()
-                .voiceId("1")
+                .voiceId(1L)
                 .name(CharacterName("테스트 캐릭터"))
                 .persona(Persona("테스트 페르소나 입니다. 아무렇게나 대답하세요"))
                 .author(masterMember)

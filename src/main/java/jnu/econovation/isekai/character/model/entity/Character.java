@@ -50,7 +50,7 @@ public class Character extends BaseEntity {
     private Persona persona;
 
     @Column(nullable = false)
-    private String voiceId;
+    private Long voiceId;
 
     @Column(nullable = false)
     private Boolean isPublic;
@@ -64,7 +64,7 @@ public class Character extends BaseEntity {
             String thumbnailUrl,
             CharacterName name,
             Persona persona,
-            String voiceId,
+            Long voiceId,
             Boolean isPublic
     ) {
         this.author = author;
