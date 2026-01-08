@@ -4,7 +4,7 @@ set -e
 APP_NAME="isek-ai"
 JAR_PATH="$(pwd)/build/libs"
 JAR_FILE=$(ls $JAR_PATH/*.jar | grep -v 'plain' | head -n 1)
-LOG_PATH="/var/log/$APP_NAME"
+LOG_PATH="../log/$APP_NAME"
 PID_FILE="/tmp/$APP_NAME.pid"
 
 export SPRING_PROFILES_ACTIVE=prod
