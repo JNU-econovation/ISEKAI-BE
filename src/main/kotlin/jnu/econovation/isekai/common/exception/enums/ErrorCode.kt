@@ -15,7 +15,7 @@ enum class ErrorCode(
     INVALID_PAGEABLE_FIELD(
         Domain.COMMON,
         HttpStatus.BAD_REQUEST,
-        2,
+        3,
         "페이징 가능한 필드가 아닙니다. -> %s = %s"
     ),
     BAD_DATA_MEANING(Domain.COMMON, HttpStatus.UNPROCESSABLE_ENTITY, 1, "%s"),
