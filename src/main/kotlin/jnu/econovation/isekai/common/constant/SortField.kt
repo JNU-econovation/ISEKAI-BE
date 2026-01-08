@@ -4,7 +4,7 @@ enum class SortField(
         val requestField: String,
         val dbField: String
 ) {
-    CREATED_AT("createdAt", "createdAt");
+    CREATED_AT("created_at", "createdAt");
 
     companion object {
         fun fromRequestKey(requestKey: String): SortField? {
