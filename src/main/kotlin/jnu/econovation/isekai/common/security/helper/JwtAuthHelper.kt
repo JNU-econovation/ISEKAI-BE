@@ -19,36 +19,32 @@ class JwtAuthHelper(
         private const val BEARER_PREFIX = "Bearer "
     }
 
-    fun authenticate(authHeader: String?, isBearer: Boolean = true): Authentication {
-        authHeader ?: throw UnauthorizedException()
+    fun authenticate(authHeader: String?, isBearer: Boolean = true): Result<Authentication> =
+        runCatching {
+            authHeader ?: throw UnauthorizedException()
 
-        val token = if (isBearer) {
-            if (!authHeader.startsWith(BEARER_PREFIX)) throw UnauthorizedException()
+            val token = if (isBearer) {
+                if (!authHeader.startsWith(BEARER_PREFIX)) throw UnauthorizedException()
 
-            authHeader.removePrefix(BEARER_PREFIX)
-        } else {
-            authHeader
+                authHeader.removePrefix(BEARER_PREFIX)
+            } else {
+                authHeader
+            }
+
+            if (!jwtUtil.validateToken(token))
+                throw UnauthorizedException()
+
+            val memberId = jwtUtil.extractId(token) ?: throw InternalServerException(
+                cause = IllegalStateException("토큰이 유효하지만 id 추출 실패")
+            )
+
+            val memberInfo = memberService.get(memberId) ?: throw InternalServerException(
+                cause = IllegalStateException("토큰이 유효하지만 DB에 해당 회원 정보가 없음")
+            )
+
+            val userDetails = IsekAIUserDetails(memberInfo = memberInfo)
+
+            UsernamePasswordAuthenticationToken(userDetails, null, userDetails.authorities)
         }
-
-        if (!jwtUtil.validateToken(token))
-            throw UnauthorizedException()
-
-        val memberId = jwtUtil.extractId(token) ?: throw InternalServerException(
-            cause = IllegalStateException("토큰이 유효하지만 id 추출 실패")
-        )
-
-        val memberInfo = memberService.get(memberId) ?: throw InternalServerException(
-            cause = IllegalStateException("토큰이 유효하지만 DB에 해당 회원 정보가 없음")
-        )
-
-        val userDetails = IsekAIUserDetails(memberInfo = memberInfo)
-
-        return UsernamePasswordAuthenticationToken(
-            userDetails,
-            null,
-            userDetails.authorities
-        )
-
-    }
 
 }
