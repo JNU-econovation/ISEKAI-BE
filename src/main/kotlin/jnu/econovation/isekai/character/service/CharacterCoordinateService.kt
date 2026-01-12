@@ -207,17 +207,17 @@ class CharacterCoordinateService(
     }
 
     @Transactional(readOnly = true)
-    fun getCharacterList(memberInfo: MemberInfoDTO, pageable: Pageable): Page<CharacterResponse> {
+    fun getCharacterList(memberInfo: MemberInfoDTO?, pageable: Pageable): Page<CharacterResponse> {
         return dataService.findAllByIsPublic(pageable)
             .map { CharacterDTO.from(it) }
-            .map { CharacterResponse.from(viewerId = memberInfo.id, characterDTO = it) }
+            .map { CharacterResponse.from(viewerId = memberInfo?.id, characterDTO = it) }
     }
 
     @Transactional(readOnly = true)
-    fun getCharacterForResponse(memberInfo: MemberInfoDTO, id: Long): CharacterResponse {
+    fun getCharacterForResponse(memberInfo: MemberInfoDTO?, id: Long): CharacterResponse {
         val characterDTO: CharacterDTO = getCharacter(id) ?: throw NoSuchCharacterException()
 
-        return CharacterResponse.from(viewerId = memberInfo.id, characterDTO = characterDTO)
+        return CharacterResponse.from(viewerId = memberInfo?.id, characterDTO = characterDTO)
     }
 
     @Transactional(readOnly = true)

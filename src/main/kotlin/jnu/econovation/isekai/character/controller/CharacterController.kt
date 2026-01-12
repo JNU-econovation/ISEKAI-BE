@@ -55,17 +55,17 @@ class CharacterController(
     @GetMapping
     fun getCharacterList(
         @ResolvePageable(allowed = [SortField.CREATED_AT]) pageable: Pageable,
-        @AuthenticationPrincipal userDetails: IsekAIUserDetails
+        @AuthenticationPrincipal userDetails: IsekAIUserDetails?
     ): Page<CharacterResponse> {
-        return service.getCharacterList(userDetails.memberInfo, pageable)
+        return service.getCharacterList(userDetails?.memberInfo, pageable)
     }
 
     @GetMapping("/{id}")
     fun getCharacter(
-        @AuthenticationPrincipal userDetails: IsekAIUserDetails,
+        @AuthenticationPrincipal userDetails: IsekAIUserDetails?,
         @PathVariable id: Long
     ): CharacterResponse {
-        return service.getCharacterForResponse(userDetails.memberInfo, id)
+        return service.getCharacterForResponse(userDetails?.memberInfo, id)
     }
 
     @DeleteMapping("/{id}")
