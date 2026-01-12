@@ -162,8 +162,10 @@ class RestExceptionHandler : ResponseEntityExceptionHandler() {
     }
 
     private fun handleClientExceptionInternal(e: ClientException): ResponseEntity<Any> {
+        val message = e.message ?: e.errorCode.message
+
         return ResponseEntity.status(e.errorCode.status)
-            .body(CommonResponse.ofFailure(e.errorCode.message, e.errorCode))
+            .body(CommonResponse.ofFailure(message, e.errorCode))
     }
 
     private fun handleExceptionInternal(
