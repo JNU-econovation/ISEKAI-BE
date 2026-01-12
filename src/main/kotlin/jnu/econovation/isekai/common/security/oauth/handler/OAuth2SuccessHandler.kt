@@ -8,6 +8,7 @@ import jnu.econovation.isekai.common.cookie.util.CookieUtil.removeCookie
 import jnu.econovation.isekai.common.security.config.UriSecurityConfig
 import jnu.econovation.isekai.common.security.dto.internal.IsekAIUserDetails
 import jnu.econovation.isekai.common.security.util.JwtUtil
+import mu.KotlinLogging
 import org.springframework.security.core.Authentication
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler
 import org.springframework.stereotype.Component
@@ -21,6 +22,7 @@ class OAuth2SuccessHandler(
 ) : AuthenticationSuccessHandler {
 
     companion object {
+        private val logger = KotlinLogging.logger {}
         private const val ACCESS_TOKEN = "accessToken"
     }
 
@@ -35,6 +37,10 @@ class OAuth2SuccessHandler(
                 return
             }
         val accessToken: String = jwtUtil.generateToken(userDetails.memberInfo)
+
+        request.cookies?.forEach {
+            logger.info { "Found Cookie: ${it.name} = ${it.value}" }
+        }
 
         val redirectOrigin: String = WebUtils
             .getCookie(request, REDIRECT_ORIGIN_KEY)
