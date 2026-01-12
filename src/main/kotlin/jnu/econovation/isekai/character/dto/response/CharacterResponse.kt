@@ -17,7 +17,7 @@ data class CharacterResponse private constructor(
     val isAuthorMe: Boolean
 ) {
     companion object {
-        fun from(viewerId: Long, characterDTO: CharacterDTO): CharacterResponse {
+        fun from(viewerId: Long?, characterDTO: CharacterDTO): CharacterResponse {
             return CharacterResponse(
                 id = characterDTO.id,
                 author = AuthorInfo.fromMemberInfo(characterDTO.author),

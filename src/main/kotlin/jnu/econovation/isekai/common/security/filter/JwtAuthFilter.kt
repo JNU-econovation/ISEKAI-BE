@@ -8,8 +8,9 @@ import jnu.econovation.isekai.common.security.constant.SecurityConstant.AUTHORIZ
 import jnu.econovation.isekai.common.security.exception.handler.Rest401Handler
 import jnu.econovation.isekai.common.security.exception.handler.Rest500Handler
 import jnu.econovation.isekai.common.security.helper.JwtAuthHelper
+import org.springframework.http.HttpMethod
+import org.springframework.security.authentication.AbstractAuthenticationToken
 import org.springframework.security.authentication.AuthenticationServiceException
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.AuthenticationException
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource
@@ -34,12 +35,16 @@ class JwtAuthFilter(
             "/login/**",
             "/websocket/**"
         )
+
+        private val GREYLIST = setOf(
+            "/characters/**"
+        )
         private val pathMatcher: AntPathMatcher = AntPathMatcher()
     }
 
     override fun shouldNotFilter(request: HttpServletRequest): Boolean {
         val path = request.requestURI
-        return WHITELIST.stream().anyMatch { pathMatcher.match(it, path) }
+        return WHITELIST.any { pathMatcher.match(it, path) }
     }
 
     override fun doFilterInternal(
@@ -47,22 +52,47 @@ class JwtAuthFilter(
         response: HttpServletResponse,
         filterChain: FilterChain
     ) {
-        try {
-            val auth = helper.authenticate(request.getHeader(AUTHORIZATION_HEADER))
-                    as UsernamePasswordAuthenticationToken
-            auth.details = WebAuthenticationDetailsSource().buildDetails(request)
-            SecurityContextHolder.getContext().authentication = auth
-            filterChain.doFilter(request, response)
-        } catch (e: AuthenticationException) {
-            SecurityContextHolder.clearContext()
-            rest401Handler.commence(request, response, e)
-        } catch (e: Exception) {
-            rest500Handler.commence(
-                request,
-                response,
-                AuthenticationServiceException(criticalError("인증"), e)
-            )
-            SecurityContextHolder.clearContext()
+
+        val isGreyList = GREYLIST
+            .stream()
+            .anyMatch { pathMatcher.match(it, request.requestURI) }
+
+        val isGetMethod = request.method == HttpMethod.GET.name()
+
+        helper.authenticate(request.getHeader(AUTHORIZATION_HEADER))
+            .onSuccess { auth ->
+                if (auth is AbstractAuthenticationToken) {
+                    auth.details = WebAuthenticationDetailsSource().buildDetails(request)
+                }
+                SecurityContextHolder.getContext().authentication = auth
+                filterChain.doFilter(request, response)
+            }
+            .onFailure { exception ->
+                if (isGreyList && isGetMethod) {
+                    SecurityContextHolder.clearContext()
+                    filterChain.doFilter(request, response)
+                } else {
+                    handleException(exception, request, response)
+                }
+            }
+    }
+
+    private fun handleException(
+        e: Throwable,
+        request: HttpServletRequest,
+        response: HttpServletResponse
+    ) {
+        SecurityContextHolder.clearContext()
+
+        when (e) {
+            is AuthenticationException -> {
+                rest401Handler.commence(request, response, e)
+            }
+
+            else -> {
+                val serviceException = AuthenticationServiceException(criticalError("인증"), e)
+                rest500Handler.commence(request, response, serviceException)
+            }
         }
     }
 }
