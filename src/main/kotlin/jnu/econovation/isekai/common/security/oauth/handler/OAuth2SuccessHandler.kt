@@ -38,10 +38,6 @@ class OAuth2SuccessHandler(
             }
         val accessToken: String = jwtUtil.generateToken(userDetails.memberInfo)
 
-        request.cookies?.forEach {
-            logger.info { "Found Cookie: ${it.name} = ${it.value}" }
-        }
-
         val redirectOrigin: String = WebUtils
             .getCookie(request, REDIRECT_ORIGIN_KEY)
             ?.value
