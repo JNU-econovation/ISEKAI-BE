@@ -46,7 +46,14 @@ public class Character extends BaseEntity {
     @AttributeOverride(name = "value", column = @Column(name = "character_name", nullable = false))
     private CharacterName name;
 
-    @AttributeOverride(name = "value", column = @Column(name = "persona", nullable = false))
+    @AttributeOverride(
+            name = "value",
+            column = @Column(
+                    name = "persona",
+                    nullable = false,
+                    columnDefinition = "TEXT"
+            )
+    )
     private Persona persona;
 
     @Column(nullable = false)
