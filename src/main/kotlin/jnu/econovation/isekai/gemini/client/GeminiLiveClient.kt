@@ -295,7 +295,9 @@ class GeminiLiveClient(
                             listOf(
                                 Content.fromParts(Part.fromText("[이전 대화]\n(단기기억) -> ${data.shortTermMemory}\n(중기기억) -> ${data.midTermMemory})"))
                             )
-                        ).build()
+                        )
+                        .turnComplete(false)
+                        .build()
 
                     session.sendClientContent(content)
                         .exceptionally {
