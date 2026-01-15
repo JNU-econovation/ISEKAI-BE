@@ -1,14 +1,25 @@
 package jnu.econovation.isekai.gemini.dto.client.response
 
-sealed interface GeminiLiveResponse
+import jnu.econovation.isekai.gemini.constant.enums.GeminiFunctionSignature
 
-data class GeminiLiveTurnCompleteResponse(
-    val inputSTT: String,
-    val krText: String,
-    val jpText: String
-) : GeminiLiveResponse
+sealed class GeminiOutput {
+    data class InputSTT(val text: String) : GeminiOutput()
 
-data class GeminiLiveTextResponse(
-    val krText: String,
-    val jpText: String
-) : GeminiLiveResponse
+    data class InputOneSentenceSTT(val text: String) : GeminiOutput()
+
+    data class OutputSTT(val text: String) : GeminiOutput()
+
+    data class Interrupted(val text: String = "Gemini가 응답 중에 사용자가 끼어듦") : GeminiOutput()
+
+    data class TurnComplete(val inputSTT: String, val outputSTT: String) : GeminiOutput()
+
+    data class FunctionCall(
+        val id: String,
+        val signature: GeminiFunctionSignature,
+        val params: GeminiFunctionParams
+    ) : GeminiOutput()
+
+    @Suppress("ArrayInDataClass")
+    data class VoiceStream(val chunk: ByteArray) : GeminiOutput()
+}
+

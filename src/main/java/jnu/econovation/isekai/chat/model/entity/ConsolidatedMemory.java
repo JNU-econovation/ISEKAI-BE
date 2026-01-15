@@ -22,7 +22,7 @@ import org.hibernate.type.SqlTypes;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class LongTermMemory extends BaseEntity {
+public class ConsolidatedMemory extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -45,7 +45,7 @@ public class LongTermMemory extends BaseEntity {
     private float[] embedding;
 
     @Builder
-    LongTermMemory(Character character, Member hostMember, String summary, float[] embedding) {
+    ConsolidatedMemory(Character character, Member hostMember, String summary, float[] embedding) {
         this.character = character;
         this.summary = summary;
         this.hostMember = hostMember;

@@ -33,7 +33,11 @@ class JwtAuthFilter(
             "/favicon.ico",
             "/oauth2/authorization/**",
             "/login/**",
-            "/websocket/**"
+            "/characters/*/voice/**"
+        )
+
+        private val BLACKLIST = setOf(
+            "/websocket/ticket"
         )
 
         private val GREYLIST = setOf(
@@ -44,7 +48,11 @@ class JwtAuthFilter(
 
     override fun shouldNotFilter(request: HttpServletRequest): Boolean {
         val path = request.requestURI
-        return WHITELIST.any { pathMatcher.match(it, path) }
+
+        val isWhitelisted = WHITELIST.any { pathMatcher.match(it, path) }
+        val isBlacklisted = BLACKLIST.any { pathMatcher.match(it, path) }
+
+        return isWhitelisted && !isBlacklisted
     }
 
     override fun doFilterInternal(
