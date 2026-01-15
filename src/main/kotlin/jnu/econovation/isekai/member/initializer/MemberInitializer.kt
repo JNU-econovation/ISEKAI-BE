@@ -7,6 +7,7 @@ import jnu.econovation.isekai.member.dto.internal.MemberInfoDTO
 import jnu.econovation.isekai.member.entity.Member
 import jnu.econovation.isekai.member.event.MemberInitializedEvent
 import jnu.econovation.isekai.member.service.MemberService
+import jnu.econovation.isekai.member.vo.Nickname
 import mu.KotlinLogging
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.ApplicationEventPublisher
@@ -34,6 +35,7 @@ class MemberInitializer(
             ?: run {
                 val masterMember = Member.builder()
                     .email(MASTER_EMAIL)
+                    .nickname(Nickname("테스트닉네임"))
                     .provider(MASTER_PROVIDER)
                     .build()
                 service.save(masterMember)
