@@ -8,31 +8,24 @@ import com.google.genai.types.Type
 import jnu.econovation.isekai.character.dto.internal.CharacterDTO
 import jnu.econovation.isekai.character.service.CharacterCoordinateService
 import jnu.econovation.isekai.chat.constant.ChatConstants.CONSOLIDATION_COUNT
-import jnu.econovation.isekai.chat.constant.ChatConstants.LONG_TERM_MEMORY_LIMIT
+import jnu.econovation.isekai.chat.constant.ChatConstants.LONG_TERM_MEMORY_SIZE
+import jnu.econovation.isekai.chat.constant.ChatConstants.MID_TERM_MEMORY_SIZE
 import jnu.econovation.isekai.chat.constant.ChatConstants.SHORT_TERM_MEMORY_SIZE
 import jnu.econovation.isekai.chat.dto.internal.ChatDTO
 import jnu.econovation.isekai.chat.dto.internal.ChatHistoryDTO
+import jnu.econovation.isekai.chat.dto.internal.ShortTermMemoryDTO
 import jnu.econovation.isekai.chat.dto.internal.SummarizeDTO
 import jnu.econovation.isekai.chat.model.entity.Chat
-import jnu.econovation.isekai.chat.model.entity.LongTermMemory
+import jnu.econovation.isekai.chat.model.entity.ConsolidatedMemory
 import jnu.econovation.isekai.chat.model.vo.Speaker
 import jnu.econovation.isekai.chat.service.internal.ChatDataService
-import jnu.econovation.isekai.chat.service.internal.LongTermMemoryDataService
+import jnu.econovation.isekai.chat.service.internal.ConsolidatedMemoryDataService
 import jnu.econovation.isekai.common.exception.server.InternalServerException
 import jnu.econovation.isekai.gemini.client.GeminiClient
 import jnu.econovation.isekai.gemini.constant.enums.GeminiModel
-import jnu.econovation.isekai.gemini.dto.client.request.GeminiInput
-import jnu.econovation.isekai.member.constant.MemberConstants.MASTER_EMAIL
 import jnu.econovation.isekai.member.entity.Member
 import jnu.econovation.isekai.member.service.MemberService
 import jnu.econovation.isekai.prompt.config.PromptConfig
-import jnu.econovation.isekai.rtzr.dto.client.response.RtzrSttResponse
-import jnu.econovation.isekai.rtzr.service.RtzrSttService
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import mu.KotlinLogging
 import org.springframework.data.redis.connection.RedisConnectionFactory
 import org.springframework.data.redis.support.atomic.RedisAtomicInteger
@@ -48,8 +41,7 @@ class ChatMemoryService(
     private val connectionFactory: RedisConnectionFactory,
     private val promptConfig: PromptConfig,
     private val mapper: ObjectMapper,
-    private val rtzrSttService: RtzrSttService,
-    private val longTermMemoryService: LongTermMemoryDataService,
+    private val consolidatedMemoryService: ConsolidatedMemoryDataService,
     private val memberService: MemberService,
     private val characterService: CharacterCoordinateService
 ) {
@@ -89,10 +81,15 @@ class ChatMemoryService(
     }
 
     @Transactional
-    suspend fun save(characterDTO: CharacterDTO, chatDTO: ChatDTO) {
+    suspend fun save(
+        hostMemberId: Long,
+        characterDTO: CharacterDTO,
+        chatDTO: ChatDTO
+    ) {
         logger.info { "채팅 기록 저장 중 -> $chatDTO" }
-        val hostMember = memberService.findByEmailEntity(MASTER_EMAIL)
-            ?: throw InternalServerException(IllegalStateException("master member not found"))
+
+        val hostMember = memberService.getEntity(hostMemberId)
+            ?: throw InternalServerException(IllegalStateException("아이디가 ${hostMemberId}인 회원을 찾지 못함"))
 
         val (inputChat, outputChat) = buildInputChatAndOutputChat(hostMember, characterDTO, chatDTO)
 
@@ -110,62 +107,87 @@ class ChatMemoryService(
     }
 
     @Transactional(readOnly = true)
-    suspend fun findMemoriesFromVoiceStream(
-        rtzrReadySignal: CompletableDeferred<Unit>,
-        voiceChunk: Flow<ByteArray>,
+    fun getShortTermMemory(
+        characterDTO: CharacterDTO,
+        hostMemberId: Long
+    ): ShortTermMemoryDTO? {
+        val recentChat = chatService
+            .getRecentChats(characterDTO, hostMemberId, SHORT_TERM_MEMORY_SIZE)
+            .map { ChatHistoryDTO.from(it) }
+
+        if (recentChat.isEmpty()) {
+            return null
+        }
+
+        return ShortTermMemoryDTO(
+            startTime = recentChat.first().chattedAt,
+            endTime = recentChat.last().chattedAt,
+            content = recentChat.joinToString("\n____________\n")
+        )
+    }
+
+    @Transactional(readOnly = true)
+    fun getMidTermMemory(
+        characterDTO: CharacterDTO,
+        hostMemberId: Long
+    ): String {
+        val midTermMemory = consolidatedMemoryService.findRecentMemories(
+            characterDTO = characterDTO,
+            hostMemberId = hostMemberId,
+            limit = MID_TERM_MEMORY_SIZE
+        )
+
+        return midTermMemory.joinToString("\n_____________________\n") { it.summary }
+    }
+
+    @Transactional(readOnly = true)
+    suspend fun getLongTermMemory(
         characterDTO: CharacterDTO,
         hostMemberId: Long,
-    ): Flow<GeminiInput.Context> {
-        val sttResultFlow: Flow<RtzrSttResponse> = rtzrSttService
-            .stt(voiceChunk, rtzrReadySignal)
-            .filter { it.final }
-            .onEach { logger.info { "rtzr stt 결과 -> ${it.alternatives.first().text}" } }
+        searchText: String,
+    ): String {
+        val embedding = try {
+            embedVector(searchText, EMBEDDING_PLANS.planA)
+        } catch (_: ServerException) {
+            logger.warn { "Retry exhausted로 인한 임베딩 교체 : ${EMBEDDING_PLANS.planA} -> ${EMBEDDING_PLANS.planB}" }
+            embedVector(searchText, EMBEDDING_PLANS.planB)
+        }
 
-        val (_, shortTermMemory) = getShortTermMemory(characterDTO, hostMemberId)
+        val longTermMemory = consolidatedMemoryService.findSimilarMemories(
+            characterDTO = characterDTO,
+            hostMemberId = hostMemberId,
+            embedding = embedding,
+            limit = LONG_TERM_MEMORY_SIZE
+        )
 
-        return sttResultFlow
-            .map { it.alternatives.first().text }
-            .filter { it.isNotBlank() }
-            .map {
-                val embedding = try {
-                    embedVector(it, EMBEDDING_PLANS.planA)
-                } catch (_: ServerException) {
-                    logger.warn { "Retry exhausted로 인한 임베딩 교체 : ${EMBEDDING_PLANS.planA} -> ${EMBEDDING_PLANS.planB}" }
-                    embedVector(it, EMBEDDING_PLANS.planB)
-                }
-
-                val longTermMemory = getLongTermMemory(characterDTO, hostMemberId, embedding)
-
-                GeminiInput.Context(shortTermMemory, longTermMemory)
-            }
+        return longTermMemory.joinToString("\n_____________________\n") { it.summary }
     }
+
 
     private suspend fun consolidate(
         characterDTO: CharacterDTO,
         hostMember: Member,
         counter: RedisAtomicInteger
     ) {
-        val (recentChat, shortTermMemory) = getShortTermMemory(characterDTO, hostMember.id)
+        val shortTermMemoryDTO: ShortTermMemoryDTO = getShortTermMemory(
+            characterDTO = characterDTO,
+            hostMemberId = hostMember.id
+        )
+            ?: throw InternalServerException(IllegalStateException("consolidation count 가 ${CONSOLIDATION_COUNT}이지만, recent chat 이 empty임"))
 
-        if (recentChat.isEmpty()) {
-            throw InternalServerException(IllegalStateException("consolidation count 가 ${CONSOLIDATION_COUNT}이지만, recent chat 이 empty임"))
-        }
-
-        val startTime = recentChat.first().chattedAt
-        val endTime = recentChat.last().chattedAt
-        val summaryPrefix = "[${startTime} ~ ${endTime}]"
+        val summaryPrefix = "[${shortTermMemoryDTO.startTime} ~ ${shortTermMemoryDTO.endTime}]"
 
         try {
             val (summarizeDTO, embedding) = summarizeAndEmbed(
-                shortTermMemory,
+                shortTermMemoryDTO.content,
                 CONSOLIDATION_PLANS
             )
 
             val characterEntity = characterService.getCharacterEntity(characterDTO.id)
                 ?: throw InternalServerException(cause = IllegalStateException("아이디가 ${characterDTO.id}인 캐릭터를 찾지 못함"))
 
-            longTermMemoryService.save(
-                LongTermMemory.builder()
+            consolidatedMemoryService.save(
+                ConsolidatedMemory.builder()
                     .character(characterEntity)
                     .summary(summaryPrefix + summarizeDTO.summary)
                     .hostMember(hostMember)
@@ -178,7 +200,6 @@ class ChatMemoryService(
             counter.set(0)
         }
     }
-
 
     private fun buildInputChatAndOutputChat(
         hostMember: Member,
@@ -224,33 +245,6 @@ class ChatMemoryService(
         }
 
         return summarizeDTO to vectorEmbeddings
-    }
-
-    private fun getShortTermMemory(
-        characterDTO: CharacterDTO,
-        hostMemberId: Long
-    ): Pair<List<ChatHistoryDTO>, String> {
-        val recentChat = chatService
-            .getRecentChats(characterDTO, hostMemberId, SHORT_TERM_MEMORY_SIZE)
-            .map { ChatHistoryDTO.from(it) }
-
-        val shortTermMemory = recentChat.joinToString("\n\n") { it.content }
-        return Pair(recentChat, shortTermMemory)
-    }
-
-    private fun getLongTermMemory(
-        characterDTO: CharacterDTO,
-        hostMemberId: Long,
-        embedding: FloatArray
-    ): String {
-        val longTermMemory = longTermMemoryService.findSimilarMemories(
-            characterDTO = characterDTO,
-            hostMemberId = hostMemberId,
-            embedding = embedding,
-            limit = LONG_TERM_MEMORY_LIMIT
-        )
-
-        return longTermMemory.joinToString("\n\n") { it.summary }
     }
 
     private suspend fun summarize(shortTermMemory: String, model: GeminiModel): SummarizeDTO {

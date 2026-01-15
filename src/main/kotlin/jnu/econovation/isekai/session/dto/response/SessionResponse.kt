@@ -4,36 +4,68 @@ import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import jnu.econovation.isekai.common.exception.enums.ErrorCode
 import jnu.econovation.isekai.enums.MessageType
-import jnu.econovation.isekai.session.dto.internal.ServerReadyDTO
-import jnu.econovation.isekai.session.dto.internal.SessionErrorDTO
-import jnu.econovation.isekai.session.dto.internal.SubtitleDTO
+import jnu.econovation.isekai.gemini.constant.enums.GeminiEmotion
+
+sealed interface SessionResponse {
+    val content: Any
+}
+
+@Suppress("ArrayInDataClass")
+data class SessionBinaryResponse(
+    override val content: ByteArray
+) : SessionResponse
 
 @ConsistentCopyVisibility
-data class SessionResponse private constructor(
+data class SessionTextResponse private constructor(
     val messageType: MessageType,
-    val content: SessionResponseContent
-) {
+    override val content: SessionTextResponseContent
+) : SessionResponse {
     companion object {
-        fun fromServerReady(): SessionResponse {
-            return SessionResponse(MessageType.SERVER_READY, ServerReadyDTO())
+        fun fromServerReady(): SessionTextResponse {
+            return SessionTextResponse(MessageType.SERVER_READY, ServerReadyDTO())
         }
 
-        fun fromSubtitle(text: String): SessionResponse = SessionResponse(
-            MessageType.SUBTITLE,
+        fun fromUserSubtitleChunk(text: String): SessionTextResponse = SessionTextResponse(
+            MessageType.USER_SUBTITLE_CHUNK,
             SubtitleDTO(text)
         )
 
-        fun fromError(errorCode: ErrorCode): SessionResponse {
-            return SessionResponse(
+        fun fromUserOneSentenceSubtitle(text: String): SessionTextResponse = SessionTextResponse(
+            MessageType.USER_ONE_SENTENCE_SUBTITLE,
+            SubtitleDTO(text)
+        )
+
+        fun fromBotSubtitle(text: String): SessionTextResponse = SessionTextResponse(
+            MessageType.BOT_SUBTITLE,
+            SubtitleDTO(text)
+        )
+
+        fun fromInterrupted(): SessionTextResponse = SessionTextResponse(
+            MessageType.INTERRUPTED,
+            InterruptedDTO()
+        )
+
+        fun fromEmotion(emotion: GeminiEmotion) = SessionTextResponse(
+            MessageType.EMOTION,
+            EmotionDTO(emotion.text)
+        )
+
+        fun fromTurnComplete(user: String, bot: String) = SessionTextResponse(
+            MessageType.TURN_COMPLETE,
+            TurnCompleteSubtitleDTO(user = user, bot = bot)
+        )
+
+        fun fromError(errorCode: ErrorCode): SessionTextResponse {
+            return SessionTextResponse(
                 MessageType.ERROR,
-                SessionErrorDTO(errorCode.getCode(), errorCode.message)
+                SessionTextErrorDTO(errorCode.getCode(), errorCode.message)
             )
         }
 
-        fun fromError(errorCode: ErrorCode, customMessage: String): SessionResponse {
-            return SessionResponse(
+        fun fromError(errorCode: ErrorCode, customMessage: String): SessionTextResponse {
+            return SessionTextResponse(
                 MessageType.ERROR,
-                SessionErrorDTO(errorCode.getCode(), customMessage)
+                SessionTextErrorDTO(errorCode.getCode(), customMessage)
             )
         }
     }
@@ -47,6 +79,35 @@ data class SessionResponse private constructor(
 @JsonSubTypes(
     JsonSubTypes.Type(value = ServerReadyDTO::class, name = "serverReady"),
     JsonSubTypes.Type(value = SubtitleDTO::class, name = "subtitle"),
-    JsonSubTypes.Type(value = SessionErrorDTO::class, name = "error")
+    JsonSubTypes.Type(value = TurnCompleteSubtitleDTO::class, name = "turnComplete"),
+    JsonSubTypes.Type(value = InterruptedDTO::class, name = "interrupted"),
+    JsonSubTypes.Type(value = SessionTextErrorDTO::class, name = "error"),
+    JsonSubTypes.Type(value = EmotionDTO::class, name = "emotion")
 )
-interface SessionResponseContent
+interface SessionTextResponseContent
+
+data class ServerReadyDTO(
+    val text: String = "I'M READY"
+) : SessionTextResponseContent
+
+data class SessionTextErrorDTO(
+    val errorCode: String,
+    val message: String
+) : SessionTextResponseContent
+
+data class SubtitleDTO(
+    val text: String
+) : SessionTextResponseContent
+
+data class EmotionDTO(
+    val emotion: String
+) : SessionTextResponseContent
+
+data class TurnCompleteSubtitleDTO(
+    val user: String,
+    val bot: String
+) : SessionTextResponseContent
+
+data class InterruptedDTO(
+    val text: String = "Gemini가 응답 중에 사용자가 끼어듦"
+) : SessionTextResponseContent

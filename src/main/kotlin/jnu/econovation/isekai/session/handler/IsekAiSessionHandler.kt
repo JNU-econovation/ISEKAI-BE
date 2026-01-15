@@ -4,9 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import jnu.econovation.isekai.common.exception.client.ClientException
 import jnu.econovation.isekai.common.exception.enums.ErrorCode
 import jnu.econovation.isekai.common.exception.server.InternalServerException
+import jnu.econovation.isekai.common.websocket.constant.WebSocketConstant.MEMBER_ID_KEY
 import jnu.econovation.isekai.session.constant.SessionConstant
 import jnu.econovation.isekai.session.constant.SessionConstant.FLOW_BUFFER_SIZE
+import jnu.econovation.isekai.session.dto.response.SessionBinaryResponse
 import jnu.econovation.isekai.session.dto.response.SessionResponse
+import jnu.econovation.isekai.session.dto.response.SessionTextResponse
 import jnu.econovation.isekai.session.factory.WebSocketSessionScopeFactory
 import jnu.econovation.isekai.session.optimizer.SessionOptimizer
 import jnu.econovation.isekai.session.registry.WebSocketSessionRegistry
@@ -40,6 +43,7 @@ class IsekAiSessionHandler(
         const val OPTIMIZER_KEY = "optimizer"
         const val SESSION_SCOPE_KEY = "sessionScope"
         const val CHARACTER_ID_KEY = "characterId"
+        const val PRINCIPAL_KEY = "principal"
 
         val logger = KotlinLogging.logger {}
     }
@@ -63,17 +67,30 @@ class IsekAiSessionHandler(
             extraBufferCapacity = FLOW_BUFFER_SIZE,
             onBufferOverflow = BufferOverflow.DROP_OLDEST
         )
+        val hostMemberId = session.attributes[MEMBER_ID_KEY] as? Long
+            ?: run {
+                logger.error { "올바르지 않은 authentication -> ${session.attributes[PRINCIPAL_KEY]}" }
+                session.close(CloseStatus.POLICY_VIOLATION)
+                return
+            }
+
 
         sessionScope.launch {
-            val rtzrReadySignal = CompletableDeferred<Unit>()
             val aiServerReadySignal = CompletableDeferred<Unit>()
+            val geminiReadySignal = CompletableDeferred<Unit>()
 
             launch {
-                handleVoiceChunk(concurrentSession, rtzrReadySignal, aiServerReadySignal, clientVoiceStream)
+                handleVoiceChunk(
+                    concurrentSession,
+                    aiServerReadySignal,
+                    geminiReadySignal,
+                    clientVoiceStream,
+                    hostMemberId
+                )
             }
 
             launch {
-                awaitAndNotifyServerReady(rtzrReadySignal, aiServerReadySignal, concurrentSession)
+                awaitAndNotifyServerReady(aiServerReadySignal, geminiReadySignal, concurrentSession)
             }
         }
 
@@ -87,22 +104,23 @@ class IsekAiSessionHandler(
 
     private suspend fun handleVoiceChunk(
         session: WebSocketSession,
-        rtzrReadySignal: CompletableDeferred<Unit>,
         aiServerReadySignal: CompletableDeferred<Unit>,
-        clientVoiceStream: MutableSharedFlow<ByteArray>
+        geminiReadySignal: CompletableDeferred<Unit>,
+        clientVoiceStream: MutableSharedFlow<ByteArray>,
+        hostMemberId: Long
     ) {
         try {
-            val personaId = session.attributes[CHARACTER_ID_KEY] as? Long
+            val characterId = session.attributes[CHARACTER_ID_KEY] as? Long
                 ?: throw InternalServerException(IllegalStateException("personaId is null"))
 
             service.processVoiceChunk(
                 sessionId = session.id,
-                rtzrReadySignal = rtzrReadySignal,
+                geminiReadySignal = geminiReadySignal,
                 aiServerReadySignal = aiServerReadySignal,
                 voiceStream = clientVoiceStream,
-                personaId = personaId,
-                onVoiceChunk = replyVoiceChunk(session),
-                onSubtitle = replySubtitle(session)
+                characterId = characterId,
+                hostMemberId = hostMemberId,
+                onReply = reply(session)
             )
 
         } catch (_: CancellationException) {
@@ -153,14 +171,14 @@ class IsekAiSessionHandler(
     }
 
     private suspend fun awaitAndNotifyServerReady(
-        rtzrReadySignal: CompletableDeferred<Unit>,
         aiServerReadySignal: CompletableDeferred<Unit>,
+        geminiReadySignal: CompletableDeferred<Unit>,
         session: WebSocketSession
     ) {
-        rtzrReadySignal.await()
         aiServerReadySignal.await()
+        geminiReadySignal.await()
 
-        val response = SessionResponse.fromServerReady()
+        val response = SessionTextResponse.fromServerReady()
         val payload = mapper.writeValueAsString(response)
 
         session.sendMessage(TextMessage(payload))
@@ -177,26 +195,32 @@ class IsekAiSessionHandler(
             session.sendMessage(BinaryMessage(chunk))
         }
 
-    private fun replySubtitle(session: WebSocketSession): suspend (String) -> Unit =
-        suspend@{ text ->
+    private fun reply(session: WebSocketSession): suspend (SessionResponse) -> Unit =
+        suspend@{ response ->
             val optimizer = session.attributes[OPTIMIZER_KEY] as? SessionOptimizer
 
             optimizer?.extend()
 
-            val response = SessionResponse.fromSubtitle(text)
+            when (response) {
+                is SessionBinaryResponse -> {
+                    session.sendMessage(BinaryMessage(response.content))
+                }
 
-            session.sendMessage(TextMessage(mapper.writeValueAsString(response)))
+                is SessionTextResponse -> {
+                    session.sendMessage(TextMessage(mapper.writeValueAsString(response)))
+                }
+            }
         }
 
     private fun sendErrorMessage(session: WebSocketSession, e: Throwable) {
         runCatching {
             val (errorResponse, serverError) = when (e) {
                 is ClientException -> {
-                    SessionResponse.fromError(e.errorCode) to false
+                    SessionTextResponse.fromError(e.errorCode) to false
                 }
 
                 else -> {
-                    SessionResponse.fromError(
+                    SessionTextResponse.fromError(
                         ErrorCode.INTERNAL_SERVER,
                         "서버에서 예상치 못한 에러가 발생했습니다."
                     ) to true
