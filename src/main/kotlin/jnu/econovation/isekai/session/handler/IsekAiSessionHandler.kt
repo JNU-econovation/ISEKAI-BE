@@ -12,7 +12,6 @@ import jnu.econovation.isekai.session.dto.response.SessionResponse
 import jnu.econovation.isekai.session.dto.response.SessionTextResponse
 import jnu.econovation.isekai.session.factory.WebSocketSessionScopeFactory
 import jnu.econovation.isekai.session.optimizer.SessionOptimizer
-import jnu.econovation.isekai.session.registry.WebSocketSessionRegistry
 import jnu.econovation.isekai.session.service.IsekAiSessionService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -35,7 +34,6 @@ import kotlin.coroutines.cancellation.CancellationException
 class IsekAiSessionHandler(
     private val service: IsekAiSessionService,
     private val mapper: ObjectMapper,
-    private val sessionRegistry: WebSocketSessionRegistry
 ) : BinaryWebSocketHandler() {
 
     private companion object {
@@ -56,8 +54,6 @@ class IsekAiSessionHandler(
             SessionConstant.SEND_TIME_LIMIT_MS,
             SessionConstant.OUTGOING_BUFFER_SIZE_LIMIT
         )
-
-        sessionRegistry.register(concurrentSession)
 
         val sessionScope: CoroutineScope = WebSocketSessionScopeFactory.create { throwable ->
             sendErrorMessage(concurrentSession, throwable)
@@ -155,8 +151,6 @@ class IsekAiSessionHandler(
         (session.attributes[OPTIMIZER_KEY] as? SessionOptimizer)?.stop()
 
         (session.attributes[SESSION_SCOPE_KEY] as? CoroutineScope)?.cancel()
-
-        sessionRegistry.unregister(session.id)
     }
 
     override fun handleTransportError(session: WebSocketSession, exception: Throwable) {
@@ -185,15 +179,6 @@ class IsekAiSessionHandler(
 
         logger.info { "세션 ID ${session.id}로 준비 완료 메시지 전송 완료" }
     }
-
-    private fun replyVoiceChunk(session: WebSocketSession): suspend (ByteArray) -> Unit =
-        suspend@{ chunk ->
-            val optimizer = session.attributes[OPTIMIZER_KEY] as? SessionOptimizer
-
-            optimizer?.extend()
-
-            session.sendMessage(BinaryMessage(chunk))
-        }
 
     private fun reply(session: WebSocketSession): suspend (SessionResponse) -> Unit =
         suspend@{ response ->

@@ -11,6 +11,7 @@ spring:
 
 cloud-storage:
   host: ${CLOUD_STORAGE_HOST}
+  public-url: ${CLOUD_STORAGE_PUBLIC_URL}
   port: ${CLOUD_STORAGE_PORT}
   bucket: ${CLOUD_STORAGE_BUCKET_NAME}
   region: ${CLOUD_STORAGE_REGION}
