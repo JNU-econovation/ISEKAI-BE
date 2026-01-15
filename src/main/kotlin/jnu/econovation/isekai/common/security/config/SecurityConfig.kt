@@ -77,7 +77,8 @@ class SecurityConfig(
                     "/error",
                     "/favicon.ico",
                     "/websocket/**",
-                    "/characters/**"
+                    "/characters/**",
+                    "/me/**"
                 )
                     .permitAll()
                     .anyRequest().authenticated()
