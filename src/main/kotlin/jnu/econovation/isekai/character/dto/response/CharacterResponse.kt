@@ -35,10 +35,10 @@ data class CharacterResponse private constructor(
 }
 
 @ConsistentCopyVisibility
-data class AuthorInfo private constructor(val email: String) {
+data class AuthorInfo private constructor(val nickname: String) {
     companion object {
         fun fromMemberInfo(memberInfo: MemberInfoDTO): AuthorInfo {
-            return AuthorInfo(memberInfo.email.value)
+            return AuthorInfo(memberInfo.nickname.value)
         }
     }
 }

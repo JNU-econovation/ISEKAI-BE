@@ -11,6 +11,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jnu.econovation.isekai.common.entity.BaseEntity;
 import jnu.econovation.isekai.member.vo.Email;
+import jnu.econovation.isekai.member.vo.Nickname;
 import jnu.econovation.isekai.member.vo.Oauth2Provider;
 import jnu.econovation.isekai.member.vo.Role;
 import lombok.AccessLevel;
@@ -30,6 +31,10 @@ public class Member extends BaseEntity {
     @AttributeOverride(name = "value", column = @Column(name = "email", nullable = false, unique = true))
     private Email email;
 
+    @Embedded
+    @AttributeOverride(name = "value", column = @Column(name = "nickname", nullable = false, unique = true))
+    private Nickname nickname;
+
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private Role role;
@@ -39,9 +44,10 @@ public class Member extends BaseEntity {
     private Oauth2Provider provider;
 
     @Builder
-    Member(Oauth2Provider provider, Email email) {
+    Member(Oauth2Provider provider, Nickname nickname, Email email) {
         this.provider = provider;
         this.email = email;
+        this.nickname = nickname;
         this.role = Role.USER;
     }
 }
