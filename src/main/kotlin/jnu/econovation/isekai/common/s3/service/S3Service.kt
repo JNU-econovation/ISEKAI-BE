@@ -2,7 +2,6 @@ package jnu.econovation.isekai.common.s3.service
 
 import io.awspring.cloud.s3.S3Template
 import jnu.econovation.isekai.common.exception.server.InternalServerException
-import jnu.econovation.isekai.common.s3.config.CloudStorageConfig
 import jnu.econovation.isekai.common.s3.config.CloudStorageProperties
 import jnu.econovation.isekai.common.s3.dto.internal.PersistDTO
 import jnu.econovation.isekai.common.s3.dto.internal.PresignDTO
@@ -26,7 +25,6 @@ import java.util.concurrent.CompletableFuture
 
 @Service
 class S3Service(
-    private val config: CloudStorageConfig,
     private val s3Template: S3Template,
     private val s3Presigner: S3Presigner,
     private val s3Client: S3Client,
@@ -129,13 +127,13 @@ class S3Service(
 
                 s3Client.copyObject(copyRequest)
 
-                val fullUrl = "${config.endpointUrl}/${properties.bucket}/$destinationKey"
+                val fullUrl = "${properties.publicUrl}/buckets/${properties.bucket}/$destinationKey"
                 succeedUrls.add(fullUrl)
 
                 PersistDTO(fileName = fileName, url = fullUrl)
             }
         }.onFailure { exception ->
-            CompletableFuture.runAsync {  succeedUrls.forEach { delete(it) } }
+            CompletableFuture.runAsync { succeedUrls.forEach { delete(publicUrl = it) } }
             logger.error(exception) { "S3 복사 작업 중 에러 발생 - 정리 완료: $succeedUrls" }
         }
     }
@@ -177,17 +175,19 @@ class S3Service(
 
         s3Client.putObject(putRequest, RequestBody.fromBytes(fileBytes))
 
-        val url = "${config.endpointUrl}/${properties.bucket}/$key"
+        val url = "${properties.publicUrl}/buckets/${properties.bucket}/$key"
 
         return PersistDTO(url = url, fileName = fileName)
     }
 
-    fun delete(url: String) {
+    fun delete(publicUrl: String) {
         runCatching {
-            val key = URI(url).path.removePrefix("/")
+            val path = URI(publicUrl).path
+            val key = path.substringAfter("/buckets/${properties.bucket}/")
+
             s3Template.deleteObject(properties.bucket, key)
         }.onFailure { exception ->
-            logger.error(exception) { "S3 파일 삭제 실패: $url" }
+            logger.error(exception) { "S3 파일 삭제 실패: $publicUrl" }
         }
     }
 
