@@ -17,7 +17,7 @@ class WebSocketConfig(
 ) : WebSocketConfigurer {
 
     override fun registerWebSocketHandlers(registry: WebSocketHandlerRegistry) {
-        registry.addHandler(handler, "/websocket/voice")
+        registry.addHandler(handler, "/characters/{characterId}/voice")
             .addInterceptors(webSocketHandshakeInterceptor)
             .setAllowedOriginPatterns(*originsProperties.allowedFrontEndOrigins.toTypedArray())
     }
