@@ -37,7 +37,8 @@ class JwtAuthFilter(
         )
 
         private val BLACKLIST = setOf(
-            "/websocket/ticket"
+            "/websocket/ticket",
+            "/me/**"
         )
 
         private val GREYLIST = setOf(
