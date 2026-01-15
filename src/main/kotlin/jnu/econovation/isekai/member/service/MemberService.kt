@@ -3,6 +3,7 @@ package jnu.econovation.isekai.member.service
 import jnu.econovation.isekai.common.exception.server.InternalServerException
 import jnu.econovation.isekai.common.security.oauth.dto.internal.OAuth2MemberInfoDTO
 import jnu.econovation.isekai.member.dto.internal.MemberInfoDTO
+import jnu.econovation.isekai.member.dto.response.AboutMeResponse
 import jnu.econovation.isekai.member.entity.Member
 import jnu.econovation.isekai.member.repository.MemberRepository
 import jnu.econovation.isekai.member.util.RandomNicknameGenerator
@@ -33,6 +34,10 @@ class MemberService(
             }
 
         return MemberInfoDTO.from(member)
+    }
+
+    fun getAboutMe(memberInfoDTO: MemberInfoDTO) : AboutMeResponse {
+        return AboutMeResponse.from(memberInfoDTO)
     }
 
     @Transactional(readOnly = true)
