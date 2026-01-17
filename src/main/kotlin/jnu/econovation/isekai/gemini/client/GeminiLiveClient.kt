@@ -5,8 +5,8 @@ import com.google.genai.AsyncSession
 import com.google.genai.Client
 import com.google.genai.types.*
 import jnu.econovation.isekai.common.exception.server.InternalServerException
+import jnu.econovation.isekai.gemini.client.processor.GeminiMessageProcessor
 import jnu.econovation.isekai.gemini.config.GeminiConfig
-import jnu.econovation.isekai.gemini.constant.enums.GeminiFunctionSignature
 import jnu.econovation.isekai.gemini.constant.enums.GeminiModel
 import jnu.econovation.isekai.gemini.constant.enums.GeminiVoice
 import jnu.econovation.isekai.gemini.constant.function.GeminiFunctions
@@ -21,7 +21,6 @@ import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
-import kotlin.jvm.optionals.getOrNull
 
 @Component
 class GeminiLiveClient(
@@ -58,20 +57,17 @@ class GeminiLiveClient(
 
                 logger.info { "Gemini Live 세션이 연결되었습니다." }
 
-                val inputSTTOneSentenceBuffer = StringBuilder()
-                val inputSTTSentencesBuffer = StringBuilder()
-                val outputSTTBuffer = StringBuilder()
+                val processor = GeminiMessageProcessor(mapper)
 
                 session.receive { message ->
-                    onMessageReceived(
-                        sessionId = sessionId,
-                        message = message,
-                        inputSTTOneSentenceBuffer = inputSTTOneSentenceBuffer,
-                        inputSTTSentencesBuffer = inputSTTSentencesBuffer,
-                        outputSTTBuffer = outputSTTBuffer,
-                    )
+                    try {
+                        val outputs = processor.process(sessionId, message)
+                        outputs.forEach { trySend(it) }
+                    } catch (e: Exception) {
+                        logger.error(e) { "메시지 처리 중 에러 발생" }
+                    }
                 }
-                launch { send(inputData, session) }
+                launch { send(inputData, session, processor) }
                 awaitClose { onClosed(session) }
             }
         } catch (e: Exception) {
@@ -115,168 +111,10 @@ class GeminiLiveClient(
             .build()
     }
 
-    private fun ProducerScope<GeminiOutput>.onMessageReceived(
-        sessionId: String,
-        message: LiveServerMessage,
-        inputSTTSentencesBuffer: StringBuilder,
-        inputSTTOneSentenceBuffer: StringBuilder,
-        outputSTTBuffer: StringBuilder,
-    ) {
-        logger.debug { "gemini received -> $message" }
-
-        processInputSTT(message, inputSTTOneSentenceBuffer)
-        processOutputSTT(message, outputSTTBuffer)
-        processOutputVoiceStream(message)
-        processFunctionCall(sessionId, message)
-        processInterrupted(message)
-        processTurnComplete(
-            message = message,
-            inputSTTOneSentenceBuffer = inputSTTOneSentenceBuffer,
-            inputSTTSentencesBuffer = inputSTTSentencesBuffer,
-            outputSTTBuffer = outputSTTBuffer
-        )
-    }
-
-
-    private fun ProducerScope<GeminiOutput>.processInputSTT(
-        message: LiveServerMessage,
-        inputSTTOneSentenceBuffer: StringBuilder
-    ) {
-        message.serverContent().flatMap { it.inputTranscription() }
-            .ifPresent {
-                it.text().ifPresent { inputSTTChunk ->
-                    inputSTTOneSentenceBuffer.append(inputSTTChunk)
-                    trySend(element = GeminiOutput.InputSTT(inputSTTChunk))
-                }
-            }
-    }
-
-    private fun ProducerScope<GeminiOutput>.processOutputSTT(
-        message: LiveServerMessage,
-        outputSTTBuffer: StringBuilder,
-    ) {
-        message.serverContent().flatMap { it.outputTranscription() }
-            .ifPresent {
-                it.text()
-                    .ifPresent { outputSTTChunk ->
-                        outputSTTBuffer.append(outputSTTChunk)
-                        trySend(element = GeminiOutput.OutputSTT(outputSTTChunk))
-                    }
-            }
-    }
-
-    private fun ProducerScope<GeminiOutput>.processOutputVoiceStream(
-        message: LiveServerMessage
-    ) {
-        message.serverContent().flatMap { it.modelTurn() }.flatMap { it.parts() }
-            .ifPresent { parts ->
-                parts.forEach {
-                    it.inlineData()
-                        .map { blob -> blob.data()?.get() }
-                        .ifPresent { data -> trySend(element = GeminiOutput.VoiceStream(data)) }
-                }
-            }
-    }
-
-
-    private fun ProducerScope<GeminiOutput>.processTurnComplete(
-        message: LiveServerMessage,
-        inputSTTOneSentenceBuffer: StringBuilder,
-        inputSTTSentencesBuffer: StringBuilder,
-        outputSTTBuffer: StringBuilder,
-    ) {
-        val isTurnComplete = message.serverContent().flatMap { it.turnComplete() }.orElse(false)
-
-        if (isTurnComplete) {
-            when {
-                outputSTTBuffer.isEmpty() -> {
-                    val output = GeminiOutput.InputOneSentenceSTT(
-                        text = inputSTTOneSentenceBuffer.toString()
-                    )
-
-                    inputSTTSentencesBuffer.append(inputSTTOneSentenceBuffer)
-                    inputSTTOneSentenceBuffer.clear()
-
-                    trySend(element = output)
-                    logger.info { "사용자 입력 1문장 turn complete. Input: [${output.text}], Output: [${outputSTTBuffer}]" }
-                }
-
-                outputSTTBuffer.isNotEmpty() -> {
-                    val finalInput = if (inputSTTSentencesBuffer.isNotEmpty()) {
-                        inputSTTSentencesBuffer.toString()
-                    } else {
-                        inputSTTOneSentenceBuffer.toString()
-                    }.trim()
-
-                    val finalOutput = outputSTTBuffer.toString().trim()
-
-                    inputSTTSentencesBuffer.clear()
-                    inputSTTOneSentenceBuffer.clear()
-                    outputSTTBuffer.clear()
-
-                    val turnComplete = GeminiOutput.TurnComplete(
-                        inputSTT = finalInput,
-                        outputSTT = finalOutput
-                    )
-
-                    trySend(turnComplete)
-                    logger.info { "gemini 응답 turn complete. Input: [${turnComplete.inputSTT}], Output: [${turnComplete.outputSTT}]" }
-                }
-            }
-        }
-    }
-
-
-    private fun ProducerScope<GeminiOutput>.processFunctionCall(
-        sessionId: String,
-        message: LiveServerMessage
-    ) {
-        message.toolCall().getOrNull()?.functionCalls()?.ifPresent { call ->
-            call.map { Triple(it.id()?.orElse(""), it.name()?.get(), it.args()?.get()) }
-                .onEach { (id, name, items) ->
-                    logger.info { "[Session:$sessionId] 함수 수신됨 - 함수 id : $id, 함수 이름 : $name, items : $items" }
-                }
-                .forEach { (id, name, items) ->
-                    val enum = name
-                        ?.let { GeminiFunctionSignature.fromText(it) }
-                        ?: run {
-                            logger.error { "function name error -> $name" }
-                            return@forEach
-                        }
-
-                    val params = runCatching {
-                        mapper.convertValue(items, enum.paramsType.java)
-                    }.getOrElse {
-                        logger.error(it) { "function params convert error" }
-                        return@forEach
-                    }
-
-                    val functionId = id ?: ""
-
-                    val output = GeminiOutput.FunctionCall(
-                        id = functionId,
-                        signature = enum,
-                        params = params
-                    )
-
-                    trySend(output)
-                }
-        }
-    }
-
-    private fun ProducerScope<GeminiOutput>.processInterrupted(message: LiveServerMessage) {
-        val isInterrupted = message.serverContent().flatMap { it.interrupted() }.orElse(false)
-        if (isInterrupted) {
-            logger.info { "인터럽트 되었습니다." }
-
-            trySend(element = GeminiOutput.Interrupted())
-        }
-    }
-
-
     private suspend fun send(
         inputData: Flow<GeminiInput>,
-        session: AsyncSession
+        session: AsyncSession,
+        processor: GeminiMessageProcessor
     ) {
         inputData.collect { data ->
             when (data) {
@@ -285,6 +123,23 @@ class GeminiLiveClient(
                         .exceptionally {
                             logger.error(it) { "audio chunk 보내는 중 에러 발생 -> ${it.message}" }
                             return@exceptionally null
+                        }.await()
+                }
+
+                is GeminiInput.Text -> {
+                    logger.info { "text message 전송 -> ${data.value}" }
+
+                    processor.onUserInputText(data.value)
+
+                    val content = LiveSendClientContentParameters.builder()
+                        .turns(listOf(Content.fromParts(Part.fromText(data.value))))
+                        .turnComplete(true)
+                        .build()
+
+                    session.sendClientContent(content)
+                        .exceptionally {
+                            logger.error(it) { "text message 보내는 중 에러 발생 -> ${it.message}" }
+                            throw it
                         }.await()
                 }
 
@@ -302,7 +157,7 @@ class GeminiLiveClient(
                     session.sendClientContent(content)
                         .exceptionally {
                             logger.error(it) { "context 보내는 중 에러 발생 -> ${it.message}" }
-                            return@exceptionally null
+                            throw it
                         }.await()
                 }
 

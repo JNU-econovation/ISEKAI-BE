@@ -1,12 +1,17 @@
 package jnu.econovation.isekai.session.handler
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import jnu.econovation.isekai.common.exception.client.ClientException
 import jnu.econovation.isekai.common.exception.enums.ErrorCode
 import jnu.econovation.isekai.common.exception.server.InternalServerException
+import jnu.econovation.isekai.common.util.AudioUtil
 import jnu.econovation.isekai.common.websocket.constant.WebSocketConstant.MEMBER_ID_KEY
 import jnu.econovation.isekai.session.constant.SessionConstant
-import jnu.econovation.isekai.session.constant.SessionConstant.FLOW_BUFFER_SIZE
+import jnu.econovation.isekai.session.constant.SessionConstant.STREAM_BUFFER_SIZE
+import jnu.econovation.isekai.session.dto.request.SessionBinaryRequest
+import jnu.econovation.isekai.session.dto.request.SessionRequest
+import jnu.econovation.isekai.session.dto.request.SessionTextRequest
 import jnu.econovation.isekai.session.dto.response.SessionBinaryResponse
 import jnu.econovation.isekai.session.dto.response.SessionResponse
 import jnu.econovation.isekai.session.dto.response.SessionTextResponse
@@ -17,7 +22,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
@@ -37,11 +43,40 @@ class IsekAiSessionHandler(
 ) : BinaryWebSocketHandler() {
 
     private companion object {
-        const val CLIENT_VOICE_STREAM_KEY = "clientVoiceStream"
+        const val CLIENT_STREAM_KEY = "clientVoiceStream"
         const val OPTIMIZER_KEY = "optimizer"
         const val SESSION_SCOPE_KEY = "sessionScope"
         const val CHARACTER_ID_KEY = "characterId"
-        const val PRINCIPAL_KEY = "principal"
+
+        var WebSocketSession.clientStream: Channel<SessionRequest>
+            get() = attributes[CLIENT_STREAM_KEY] as Channel<SessionRequest>
+            set(value) {
+                attributes[CLIENT_STREAM_KEY] = value
+            }
+
+        var WebSocketSession.optimizer: SessionOptimizer
+            get() = attributes[OPTIMIZER_KEY] as SessionOptimizer
+            set(value) {
+                attributes[OPTIMIZER_KEY] = value
+            }
+
+        var WebSocketSession.scope: CoroutineScope
+            get() = attributes[SESSION_SCOPE_KEY] as CoroutineScope
+            set(value) {
+                attributes[SESSION_SCOPE_KEY] = value
+            }
+
+        var WebSocketSession.characterId: Long?
+            get() = attributes[CHARACTER_ID_KEY] as? Long
+            set(value) {
+                attributes[CHARACTER_ID_KEY] = value
+            }
+
+        var WebSocketSession.memberId: Long?
+            get() = attributes[MEMBER_ID_KEY] as? Long
+            set(value) {
+                attributes[MEMBER_ID_KEY] = value
+            }
 
         val logger = KotlinLogging.logger {}
     }
@@ -59,30 +94,49 @@ class IsekAiSessionHandler(
             sendErrorMessage(concurrentSession, throwable)
         }
 
-        val clientVoiceStream = MutableSharedFlow<ByteArray>(
-            extraBufferCapacity = FLOW_BUFFER_SIZE,
-            onBufferOverflow = BufferOverflow.DROP_OLDEST
-        )
-        val hostMemberId = session.attributes[MEMBER_ID_KEY] as? Long
+        val hostMemberId = session.memberId
             ?: run {
-                logger.error { "올바르지 않은 authentication -> ${session.attributes[PRINCIPAL_KEY]}" }
+                logger.error { "memberId가 null 입니다. (인증 X 의심)" }
                 session.close(CloseStatus.POLICY_VIOLATION)
                 return
             }
 
+        val characterId = session.characterId
+            ?: throw InternalServerException(IllegalStateException("캐릭터 id가 null 입니다."))
+
+        val clientStream: Channel<SessionRequest> = Channel(
+            capacity = STREAM_BUFFER_SIZE, // 0.1초 마다 청크 보낼 시 12.8초 정도 저장 가능
+            onBufferOverflow = BufferOverflow.SUSPEND
+        )
 
         sessionScope.launch {
             val aiServerReadySignal = CompletableDeferred<Unit>()
             val geminiReadySignal = CompletableDeferred<Unit>()
 
             launch {
-                handleVoiceChunk(
-                    concurrentSession,
-                    aiServerReadySignal,
-                    geminiReadySignal,
-                    clientVoiceStream,
-                    hostMemberId
-                )
+                runCatching {
+                    service.processInputStream(
+                        sessionId = session.id,
+                        geminiReadySignal = geminiReadySignal,
+                        aiServerReadySignal = aiServerReadySignal,
+                        inputStream = clientStream.receiveAsFlow(),
+                        characterId = characterId,
+                        hostMemberId = hostMemberId,
+                        onReply = reply(session)
+                    )
+
+                }.onFailure { exception ->
+                    when (exception) {
+                        is CancellationException -> {
+                            logger.info { "세션 ${session.id} 처리가 정상적으로 취소되었습니다." }
+                        }
+
+                        else -> {
+                            logger.error(exception) { "voice chunk 처리 중 에러 -> ${session.id}" }
+                            sendErrorMessage(session, exception)
+                        }
+                    }
+                }
             }
 
             launch {
@@ -91,66 +145,50 @@ class IsekAiSessionHandler(
         }
 
         val optimizer = SessionOptimizer(concurrentSession, sessionScope)
-        concurrentSession.attributes[OPTIMIZER_KEY] = optimizer
+        concurrentSession.optimizer = optimizer
         optimizer.start()
 
-        concurrentSession.attributes[CLIENT_VOICE_STREAM_KEY] = clientVoiceStream
-        concurrentSession.attributes[SESSION_SCOPE_KEY] = sessionScope
-    }
-
-    private suspend fun handleVoiceChunk(
-        session: WebSocketSession,
-        aiServerReadySignal: CompletableDeferred<Unit>,
-        geminiReadySignal: CompletableDeferred<Unit>,
-        clientVoiceStream: MutableSharedFlow<ByteArray>,
-        hostMemberId: Long
-    ) {
-        try {
-            val characterId = session.attributes[CHARACTER_ID_KEY] as? Long
-                ?: throw InternalServerException(IllegalStateException("personaId is null"))
-
-            service.processVoiceChunk(
-                sessionId = session.id,
-                geminiReadySignal = geminiReadySignal,
-                aiServerReadySignal = aiServerReadySignal,
-                voiceStream = clientVoiceStream,
-                characterId = characterId,
-                hostMemberId = hostMemberId,
-                onReply = reply(session)
-            )
-
-        } catch (_: CancellationException) {
-            logger.info { "세션 ${session.id} 처리가 정상적으로 취소되었습니다." }
-        } catch (e: Exception) {
-            logger.error(e) { "voice chunk 처리 중 에러 -> ${session.id}" }
-
-            sendErrorMessage(session, e)
-        }
+        concurrentSession.clientStream = clientStream
+        concurrentSession.scope = sessionScope
     }
 
     override fun handleBinaryMessage(session: WebSocketSession, message: BinaryMessage) {
-        val clientVoiceStream = session
-            .attributes[CLIENT_VOICE_STREAM_KEY] as? MutableSharedFlow<ByteArray>
-
-        val optimizer = session.attributes[OPTIMIZER_KEY] as? SessionOptimizer
-
-        val bytes = ByteArray(message.payload.remaining())
+        val clientInputStream = session.clientStream
+        val payloadSize = message.payload.remaining()
+        val bytes = ByteArray(payloadSize)
 
         message.payload.get(bytes)
 
-        optimizer?.onAudioReceived(bytes)
+        if (AudioUtil.isSilence(bytes)) {
+            val silenceBytes = ByteArray(payloadSize)
 
-        (session.attributes[SESSION_SCOPE_KEY] as? CoroutineScope)?.launch {
-            clientVoiceStream?.emit(bytes)
+            clientInputStream.trySend(SessionBinaryRequest(silenceBytes))
+            return
         }
+
+        session.optimizer.refresh()
+
+        clientInputStream.trySend(SessionBinaryRequest(bytes))
+    }
+
+    override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
+        val request: SessionTextRequest = mapper.readValue<SessionTextRequest>(message.payload)
+
+        val clientInputStream = session.clientStream
+
+        val optimizer = session.optimizer
+
+        optimizer.refresh()
+
+        clientInputStream.trySend(request)
     }
 
     override fun afterConnectionClosed(session: WebSocketSession, status: CloseStatus) {
         logger.info { "Client disconnected: ${session.id}. Cancelling session scope." }
 
-        (session.attributes[OPTIMIZER_KEY] as? SessionOptimizer)?.stop()
+        session.optimizer.stop()
 
-        (session.attributes[SESSION_SCOPE_KEY] as? CoroutineScope)?.cancel()
+        session.scope.cancel()
     }
 
     override fun handleTransportError(session: WebSocketSession, exception: Throwable) {
@@ -182,9 +220,9 @@ class IsekAiSessionHandler(
 
     private fun reply(session: WebSocketSession): suspend (SessionResponse) -> Unit =
         suspend@{ response ->
-            val optimizer = session.attributes[OPTIMIZER_KEY] as? SessionOptimizer
+            val optimizer = session.optimizer
 
-            optimizer?.extend()
+            optimizer.refresh()
 
             when (response) {
                 is SessionBinaryResponse -> {

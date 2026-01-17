@@ -14,7 +14,9 @@ import jnu.econovation.isekai.gemini.dto.client.request.GeminiInput
 import jnu.econovation.isekai.gemini.dto.client.response.GeminiFunctionParams
 import jnu.econovation.isekai.gemini.dto.client.response.GeminiOutput
 import jnu.econovation.isekai.prompt.service.PromptService
-import jnu.econovation.isekai.session.constant.SessionConstant.FLOW_BUFFER_SIZE
+import jnu.econovation.isekai.session.dto.request.SessionBinaryRequest
+import jnu.econovation.isekai.session.dto.request.SessionRequest
+import jnu.econovation.isekai.session.dto.request.SessionTextRequest
 import jnu.econovation.isekai.session.dto.response.SessionBinaryResponse
 import jnu.econovation.isekai.session.dto.response.SessionResponse
 import jnu.econovation.isekai.session.dto.response.SessionTextResponse
@@ -22,7 +24,10 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import mu.KotlinLogging
@@ -43,11 +48,11 @@ class IsekAiSessionService(
         val logger = KotlinLogging.logger {}
     }
 
-    suspend fun processVoiceChunk(
+    suspend fun processInputStream(
         sessionId: String,
         geminiReadySignal: CompletableDeferred<Unit>,
         aiServerReadySignal: CompletableDeferred<Unit>,
-        voiceStream: Flow<ByteArray>,
+        inputStream: Flow<SessionRequest>,
         characterId: Long,
         hostMemberId: Long,
         onReply: suspend (SessionResponse) -> Unit
@@ -58,18 +63,27 @@ class IsekAiSessionService(
 
         val prompt = promptService.getPrompt(characterDTO)
 
-        val sharedVoiceStream = voiceStream
-            .buffer(capacity = FLOW_BUFFER_SIZE, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-            .shareIn(this, SharingStarted.Lazily)
+        val realtimeInput = inputStream.map {
+            when (it) {
+                is SessionBinaryRequest -> {
+                    GeminiInput.Audio(it.content)
+                }
 
-        val realtimeVoiceInput = sharedVoiceStream.map { GeminiInput.Audio(it) }
+                is SessionTextRequest -> {
+                    GeminiInput.Text(it.content.text)
+                }
+            }
+        }
 
-        val geminiContextInput = Channel<GeminiInput.Context>(Channel.BUFFERED)
+        val geminiContextInput = Channel<GeminiInput.Context>(
+            Channel.BUFFERED,
+            BufferOverflow.SUSPEND
+        )
 
-        val geminiToolInput = Channel<GeminiInput>(Channel.BUFFERED)
+        val geminiToolInput = Channel<GeminiInput>(Channel.BUFFERED, BufferOverflow.SUSPEND)
 
         val geminiInput: Flow<GeminiInput> = merge(
-            realtimeVoiceInput,
+            realtimeInput,
             geminiContextInput.receiveAsFlow(),
             geminiToolInput.receiveAsFlow()
         )

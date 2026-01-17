@@ -19,6 +19,6 @@ object GeminiFunctions {
         .description("Gemini의 현재 감정 상태를 업데이트합니다. 해당 함수를 적극적으로 사용하세요.")
         .name(GeminiFunctionSignature.EMOTION.text)
         .parameters(GeminiSchema.EMOTION_SCHEMA)
-        .behavior(Behavior.Known.NON_BLOCKING)
+        .behavior(Behavior.Known.BLOCKING)
         .build()
 }
