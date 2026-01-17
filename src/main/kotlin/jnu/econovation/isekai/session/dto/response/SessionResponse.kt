@@ -3,7 +3,6 @@ package jnu.econovation.isekai.session.dto.response
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import jnu.econovation.isekai.common.exception.enums.ErrorCode
-import jnu.econovation.isekai.enums.MessageType
 import jnu.econovation.isekai.gemini.constant.enums.GeminiEmotion
 
 sealed interface SessionResponse {
@@ -85,6 +84,17 @@ data class SessionTextResponse private constructor(
     JsonSubTypes.Type(value = EmotionDTO::class, name = "emotion")
 )
 interface SessionTextResponseContent
+
+enum class MessageType {
+    SERVER_READY,
+    USER_SUBTITLE_CHUNK,
+    USER_ONE_SENTENCE_SUBTITLE,
+    BOT_SUBTITLE,
+    INTERRUPTED,
+    TURN_COMPLETE,
+    EMOTION,
+    ERROR
+}
 
 data class ServerReadyDTO(
     val text: String = "I'M READY"

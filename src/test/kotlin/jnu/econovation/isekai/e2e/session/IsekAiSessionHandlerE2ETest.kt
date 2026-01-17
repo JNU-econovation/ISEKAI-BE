@@ -6,12 +6,12 @@ import jakarta.websocket.ContainerProvider
 import jnu.econovation.isekai.Application
 import jnu.econovation.isekai.common.security.util.JwtUtil
 import jnu.econovation.isekai.common.websocket.dto.response.TicketResponse
-import jnu.econovation.isekai.enums.MessageType.*
 import jnu.econovation.isekai.gemini.config.GeminiConfig
 import jnu.econovation.isekai.member.constant.MemberConstants.MASTER_EMAIL
 import jnu.econovation.isekai.member.dto.internal.MemberInfoDTO
 import jnu.econovation.isekai.member.repository.MemberRepository
 import jnu.econovation.isekai.session.constant.SessionConstant.INCOMING_MESSAGE_SIZE_LIMIT
+import jnu.econovation.isekai.session.dto.response.MessageType.*
 import jnu.econovation.isekai.session.dto.response.SessionTextResponse
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay

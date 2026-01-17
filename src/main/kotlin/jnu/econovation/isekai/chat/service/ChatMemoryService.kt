@@ -104,6 +104,8 @@ class ChatMemoryService(
             consolidate(characterDTO, hostMember, counter)
             counter.set(0)
         }
+
+        logger.info { "채팅 기록 저장 성공 -> $chatDTO" }
     }
 
     @Transactional(readOnly = true)
