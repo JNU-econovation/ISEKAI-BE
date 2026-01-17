@@ -20,6 +20,7 @@ uri:
   allowed-front-end-origins:
     - http://localhost:*
     - https://localhost:*
+    - https://isekai-fe-qux5.vercel.app
   success-path: /auth/success
   default-redirect-origin: http://localhost:3000
 
