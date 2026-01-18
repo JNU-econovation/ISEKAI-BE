@@ -15,11 +15,12 @@ class AiServerTTSService(
 ) {
 
     suspend fun tts(
-        requestStream : Flow<TTSRequest>,
+        voiceId: Long,
+        requestStream: Flow<TTSRequest>,
         aiServerReadySignal: CompletableDeferred<Unit>
-    ) : Flow<TTSResponse> {
+    ): Flow<TTSResponse> {
         return flow {
-            emitAll(client.tts(requestStream, aiServerReadySignal))
+            emitAll(client.tts(voiceId, requestStream, aiServerReadySignal))
         }
     }
 }

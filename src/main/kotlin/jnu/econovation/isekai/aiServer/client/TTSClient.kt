@@ -1,6 +1,8 @@
 package jnu.econovation.isekai.aiServer.client
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import io.lettuce.core.internal.Futures.await
+import jakarta.websocket.ContainerProvider
 import jnu.econovation.isekai.aiServer.config.AiServerConfig
 import jnu.econovation.isekai.aiServer.dto.request.TTSRequest
 import jnu.econovation.isekai.aiServer.dto.response.TTSResponse
@@ -26,10 +28,23 @@ class TTSClient(
     private companion object {
         const val END_OF_STREAM = "EOS"
         val logger = mu.KotlinLogging.logger {}
-        val wsClient = StandardWebSocketClient()
+        val wsClient = StandardWebSocketClient(
+            ContainerProvider.getWebSocketContainer().apply {
+                defaultMaxBinaryMessageBufferSize = 1024 * 1024
+                defaultMaxTextMessageBufferSize = 1024 * 1024
+                defaultMaxSessionIdleTimeout = 60000
+
+                setAsyncSendTimeout(30000)
+            }
+        ).apply {
+            // 연결/핸드셰이크 타임아웃 설정
+            // 기본값이 짧아서 Cold Start 때 터지는 것을 방지합니다. (30초로 설정)
+            userProperties["org.apache.tomcat.websocket.IO_TIMEOUT_MS"] = "30000"
+        }
     }
 
     suspend fun tts(
+        voiceId: Long,
         requestStream: Flow<TTSRequest>,
         aiServerReadySignal: CompletableDeferred<Unit>
     ): Flow<TTSResponse> = channelFlow {
@@ -38,7 +53,7 @@ class TTSClient(
         val session = wsClient.execute(
             handler,
             WebSocketHttpHeaders(),
-            URI(config.webSocketUrl)
+            URI("${config.webSocketUrl}/${voiceId}")
         ).await()
 
         aiServerReadySignal.complete(Unit)

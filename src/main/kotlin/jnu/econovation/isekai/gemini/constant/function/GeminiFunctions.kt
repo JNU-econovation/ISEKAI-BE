@@ -16,7 +16,7 @@ object GeminiFunctions {
 
 
     val EMOTION_FUNCTION: FunctionDeclaration = FunctionDeclaration.builder()
-        .description("Gemini의 현재 감정 상태를 업데이트합니다. 해당 함수를 적극적으로 사용하세요.")
+        .description("Gemini의 현재 감정 상태를 업데이트합니다. 대화를 시작하기 전에 이 함수를 가장 먼저 호출하여 표정을 설정해야 합니다. 반드시 텍스트 발화를 시작하기 **전(Before)**에 호출하세요.")
         .name(GeminiFunctionSignature.EMOTION.text)
         .parameters(GeminiSchema.EMOTION_SCHEMA)
         .behavior(Behavior.Known.BLOCKING)

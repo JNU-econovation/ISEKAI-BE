@@ -1,3 +1,4 @@
 prompt:
   summarize: classpath:prompts/summarize.md
   memory: classpath:prompts/memory.md
+  background-image: classpath:prompts/background-image.md
