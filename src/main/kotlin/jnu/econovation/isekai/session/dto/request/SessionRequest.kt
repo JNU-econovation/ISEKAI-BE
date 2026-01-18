@@ -30,7 +30,8 @@ data class SessionTextRequest private constructor(
 @JsonTypeInfo(
     use = JsonTypeInfo.Id.NAME,
     include = JsonTypeInfo.As.PROPERTY,
-    property = "@type"
+    property = "@type",
+    defaultImpl = TextMessageDTO::class
 )
 @JsonSubTypes(JsonSubTypes.Type(value = TextMessageDTO::class, name = "textMessage"))
 interface SessionTextRequestContent {
