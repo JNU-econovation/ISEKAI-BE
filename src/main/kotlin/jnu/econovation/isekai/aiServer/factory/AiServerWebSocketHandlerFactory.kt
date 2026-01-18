@@ -11,6 +11,6 @@ class AiServerWebSocketHandlerFactory(
     private val mapper: ObjectMapper
 ) {
     fun createHandler(channel: SendChannel<TTSResponse>): AiServerWebSocketHandler {
-        return AiServerWebSocketHandler(channel)
+        return AiServerWebSocketHandler(channel, mapper)
     }
 }

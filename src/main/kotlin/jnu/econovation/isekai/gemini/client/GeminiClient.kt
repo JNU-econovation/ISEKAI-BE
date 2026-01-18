@@ -7,6 +7,7 @@ import jnu.econovation.isekai.common.exception.server.InternalServerException
 import jnu.econovation.isekai.gemini.config.GeminiConfig
 import jnu.econovation.isekai.gemini.constant.enums.GeminiModel
 import jnu.econovation.isekai.gemini.constant.enums.GeminiModel.*
+import jnu.econovation.isekai.prompt.config.PromptConfig
 import kotlinx.coroutines.future.await
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
@@ -16,37 +17,39 @@ import kotlin.jvm.optionals.getOrNull
 @Component
 class GeminiClient(
     private val mapper: ObjectMapper,
+    promptConfig: PromptConfig,
     config: GeminiConfig
 ) {
     companion object {
         const val IMAGE_RATIO = "16:9"
         const val IMAGE_SIZE = "4K"
 
-        private val nanoBananaConfig = GenerateContentConfig.builder()
-            .imageConfig(
-                ImageConfig.builder()
-                    .aspectRatio(IMAGE_RATIO)
-                    .build()
-            )
-            .build()
-
-        private val nanoBananaProConfig = GenerateContentConfig.builder()
-            .imageConfig(
-                ImageConfig.builder()
-                    .aspectRatio(IMAGE_RATIO)
-                    .imageSize(IMAGE_SIZE)
-                    .build()
-            )
-            .build()
-
         private val logger = KotlinLogging.logger {}
-
 
         private val embeddingConfig = EmbedContentConfig.builder()
             .taskType("SEMANTIC_SIMILARITY")
             .outputDimensionality(768)
             .build()
     }
+
+    private val nanoBananaConfig = GenerateContentConfig.builder()
+        .systemInstruction(Content.fromParts(Part.fromText(promptConfig.backgroundImage)))
+        .imageConfig(
+            ImageConfig.builder()
+                .aspectRatio(IMAGE_RATIO)
+                .build()
+        )
+        .build()
+
+    private val nanoBananaProConfig = GenerateContentConfig.builder()
+        .systemInstruction(Content.fromParts(Part.fromText(promptConfig.backgroundImage)))
+        .imageConfig(
+            ImageConfig.builder()
+                .aspectRatio(IMAGE_RATIO)
+                .imageSize(IMAGE_SIZE)
+                .build()
+        )
+        .build()
 
     private val client = Client.builder().apiKey(config.apiKey).build()
 
@@ -97,7 +100,6 @@ class GeminiClient(
             buildImageConfig(model)
         )
 
-        logger.debug { "image response -> $response" }
         val parts = response.candidates()
             .get().first()?.content()?.get()?.parts()?.getOrNull()
 

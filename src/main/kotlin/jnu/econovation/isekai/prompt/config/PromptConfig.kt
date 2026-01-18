@@ -9,7 +9,8 @@ import java.nio.charset.StandardCharsets
 @ConfigurationProperties(prefix = "prompt")
 data class PromptConfig(
     var summarize: String,
-    var memory: String
+    var memory: String,
+    var backgroundImage: String
 ) {
 
     @Autowired
@@ -19,6 +20,7 @@ data class PromptConfig(
     fun init() {
         summarize = loadContent(summarize)
         memory = loadContent(memory)
+        backgroundImage = loadContent(backgroundImage)
     }
 
     private fun loadContent(path: String): String {
