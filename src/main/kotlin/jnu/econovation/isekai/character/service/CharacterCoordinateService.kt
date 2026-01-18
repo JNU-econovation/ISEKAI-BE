@@ -1,5 +1,6 @@
 package jnu.econovation.isekai.character.service
 
+import com.google.genai.errors.ServerException
 import jnu.econovation.isekai.aiServer.client.CharacterGenerateClient
 import jnu.econovation.isekai.aiServer.dto.request.AIServerCharacterGenerateRequest
 import jnu.econovation.isekai.character.dto.internal.CharacterDTO
@@ -25,11 +26,17 @@ import jnu.econovation.isekai.common.s3.enums.FileName
 import jnu.econovation.isekai.common.s3.exception.UnexpectedFileSetException
 import jnu.econovation.isekai.common.s3.service.S3Service
 import jnu.econovation.isekai.gemini.client.GeminiClient
+import jnu.econovation.isekai.gemini.constant.enums.GeminiModel
+import jnu.econovation.isekai.gemini.constant.enums.GeminiModel.NANO_BANANA
+import jnu.econovation.isekai.gemini.constant.enums.GeminiModel.NANO_BANANA_PRO
 import jnu.econovation.isekai.member.dto.internal.MemberInfoDTO
 import jnu.econovation.isekai.member.entity.Member
 import jnu.econovation.isekai.member.service.MemberService
+import mu.KotlinLogging
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
+import org.springframework.retry.annotation.Backoff
+import org.springframework.retry.annotation.Retryable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.awt.RenderingHints
@@ -58,6 +65,13 @@ class CharacterCoordinateService(
         )
 
         private const val DEFAULT_VOICE_ID = 1L
+
+        private val logger = KotlinLogging.logger {}
+
+        private val IMAGE_PLANS = ImagePlan(
+            planA = NANO_BANANA,
+            planB = NANO_BANANA_PRO
+        )
     }
 
     fun generateCharacter(
@@ -98,7 +112,20 @@ class CharacterCoordinateService(
         memberInfo: MemberInfoDTO,
         request: GenerateBackgroundImageRequest
     ): GenerateBackgroundImageResponse {
-        val image: ByteArray = geminiClient.getImageResponse(request.prompt)
+        val image: ByteArray = runCatching {
+            getBackgroundImage(request.prompt, IMAGE_PLANS.planB)
+        }.recoverCatching { exception ->
+            when (exception) {
+                is InternalServerException, is ServerException -> {
+                    logger.warn { "Retry exhausted로 인한 모델 교체: ${IMAGE_PLANS.planB} -> ${IMAGE_PLANS.planA}" }
+                    getBackgroundImage(request.prompt, IMAGE_PLANS.planA)
+                }
+
+                else -> throw exception
+            }
+        }.getOrThrow()
+
+
         val uuid = request.uuid.toUUID()
 
         s3Service.uploadImageImmediately(
@@ -239,7 +266,7 @@ class CharacterCoordinateService(
     }
 
     @Transactional
-    fun recoverVoiceIdToDefault(characterId : Long) : Result<Unit> {
+    fun recoverVoiceIdToDefault(characterId: Long): Result<Unit> {
         val character = getCharacterEntity(characterId)
             ?: return Result.failure(NoSuchCharacterException())
 
@@ -252,6 +279,18 @@ class CharacterCoordinateService(
         UUID.fromString(this)
     } catch (_: Exception) {
         throw BadUUIDException()
+    }
+
+    @Retryable(
+        value = [InternalServerException::class, ServerException::class],
+        maxAttempts = 2,
+        backoff = Backoff(delay = 500, multiplier = 2.0, random = true)
+    )
+    private fun getBackgroundImage(
+        prompt: String,
+        model: GeminiModel = NANO_BANANA_PRO
+    ): ByteArray {
+        return geminiClient.getImageResponse(prompt, model)
     }
 
 
@@ -327,3 +366,8 @@ class CharacterCoordinateService(
         }
     }
 }
+
+private data class ImagePlan(
+    val planA: GeminiModel,
+    val planB: GeminiModel
+)
