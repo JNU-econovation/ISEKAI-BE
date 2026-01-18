@@ -84,4 +84,8 @@ public class Character extends BaseEntity {
         this.voiceId = voiceId;
         this.isPublic = isPublic;
     }
+
+    public void changeVoiceId(Long voiceId) {
+        this.voiceId = voiceId;
+    }
 }

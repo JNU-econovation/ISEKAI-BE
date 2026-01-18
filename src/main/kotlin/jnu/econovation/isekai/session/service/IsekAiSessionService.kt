@@ -1,6 +1,7 @@
 package jnu.econovation.isekai.session.service
 
 import jnu.econovation.isekai.aiServer.dto.request.TTSRequest
+import jnu.econovation.isekai.aiServer.exception.NoSuchVoiceException
 import jnu.econovation.isekai.aiServer.service.AiServerTTSService
 import jnu.econovation.isekai.character.dto.internal.CharacterDTO
 import jnu.econovation.isekai.character.service.CharacterCoordinateService
@@ -115,11 +116,24 @@ class IsekAiSessionService(
 
 
         val ttsJob = launch {
-            aiServerTTSService.tts(
-                aiServerReadySignal = aiServerReadySignal,
-                voiceId = characterDTO.voiceId,
-                requestStream = ttsInput.receiveAsFlow()
-            ).collect { onReply(SessionBinaryResponse(it.payload)) }
+            runCatching {
+                aiServerTTSService.tts(
+                    aiServerReadySignal = aiServerReadySignal,
+                    voiceId = characterDTO.voiceId,
+                    requestStream = ttsInput.receiveAsFlow()
+                ).collect { onReply(SessionBinaryResponse(it.payload)) }
+            }.onFailure {
+                when (it) {
+                    is NoSuchVoiceException -> {
+                        recoverVoiceId(characterId)
+                        throw it
+                    }
+
+                    else -> {
+                        throw it
+                    }
+                }
+            }
         }
 
         //Gemini Job이 끝나면 TTS도 끝내도록 (이게 없으면 DeadLock)
@@ -207,11 +221,7 @@ class IsekAiSessionService(
                 )
             }
 
-            is GeminiOutput.VoiceStream -> {
-//                onReply(SessionBinaryResponse(output.chunk))
-
-                //todo: ai 서버 구현 되면 거기로 보내기
-                //logger.debug { "gemini output 음성 메세지 수신 -> 크기 : ${output.chunk.size}" }
+            is GeminiOutput.VoiceStream -> { /* no-op */
             }
 
             is GeminiOutput.TurnComplete -> {
@@ -303,5 +313,16 @@ class IsekAiSessionService(
                 chatDTO = ChatDTO(output.inputSTT, output.outputSTT)
             )
         }
+    }
+
+    private fun recoverVoiceId(characterId: Long) {
+        logger.info { "잘못된 voice id로 인해 디폴트 voice로 전환 중" }
+        characterService.recoverVoiceIdToDefault(characterId)
+            .onFailure { exception ->
+                logger.error(exception) { "voice id recover 실패" }
+            }
+            .onSuccess {
+                logger.info { "voice id recover 성공" }
+            }
     }
 }
