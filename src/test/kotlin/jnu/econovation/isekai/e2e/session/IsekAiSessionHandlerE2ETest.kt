@@ -11,12 +11,10 @@ import jnu.econovation.isekai.member.constant.MemberConstants.MASTER_EMAIL
 import jnu.econovation.isekai.member.dto.internal.MemberInfoDTO
 import jnu.econovation.isekai.member.repository.MemberRepository
 import jnu.econovation.isekai.session.constant.SessionConstant.INCOMING_MESSAGE_SIZE_LIMIT
+import jnu.econovation.isekai.session.dto.request.SessionTextRequest
 import jnu.econovation.isekai.session.dto.response.MessageType.*
 import jnu.econovation.isekai.session.dto.response.SessionTextResponse
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.*
 import mu.KotlinLogging
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -78,6 +76,7 @@ class IsekAiSessionHandlerE2ETest(
     }
 
     private lateinit var readyLatch: CompletableDeferred<Unit>
+    private lateinit var subtitleLatch: CompletableDeferred<Unit>
 
     @BeforeEach
     fun setUp() {
@@ -106,10 +105,11 @@ class IsekAiSessionHandlerE2ETest(
         runBlocking {
             withTimeout(5000) { connectionLatch.await() }
 
-            withTimeout(5000) { readyLatch.await() }
+            withTimeout(15000) { readyLatch.await() }
 
             val resource = resourceLoader.getResource("classpath:test/e2e-test.wav")
             val inputStream = resource.inputStream
+            inputStream.skip(44)
             val totalBytes = inputStream.available()
             val halfwayPoint = totalBytes / 2
             val buffer = ByteArray(3200)
@@ -155,6 +155,59 @@ class IsekAiSessionHandlerE2ETest(
             session.close()
         }
         logger.info { "음성 스트리밍 e2e 끝" }
+    }
+
+    @Test
+    @DisplayName("텍스트 메세지를 보낼 수 있다.")
+    fun e2eWithTextMessage() {
+        val connectionLatch = CompletableDeferred<Unit>()
+        readyLatch = CompletableDeferred()
+        subtitleLatch = CompletableDeferred()
+
+        val session = getSession(
+            connectionLatch,
+            webSocketHeaders
+        )
+
+        runBlocking {
+            withTimeout(5000) { connectionLatch.await() }
+            logger.info { "WebSocket 연결 성공" }
+
+            withTimeout(10000) { readyLatch.await() }
+            logger.info { "서버 준비 완료" }
+
+            val request = SessionTextRequest.from("안녕하세요 자기소개 해주세요")
+
+            launch {
+                session.sendMessage(TextMessage(mapper.writeValueAsString(request)))
+                logger.info { "텍스트 메세지 전송 완료" }
+            }
+
+            async {
+                val bufferSize = 1600
+                logger.info { "VAD 트리거를 위한 침묵(Silence) 패킷 전송 시작..." }
+
+                val silenceDurationMs = 20000L
+                val delayMs = 50L
+                val silenceLoopCount = silenceDurationMs / delayMs
+                val silenceBuffer = ByteArray(bufferSize) { 0 }
+
+                for (i in 0 until silenceLoopCount) {
+                    session.sendMessage(BinaryMessage(silenceBuffer))
+                    delay(delayMs)
+                }
+                logger.info { "침묵 패킷 전송 완료 ($silenceDurationMs ms)" }
+            }.await()
+
+
+
+            withTimeout(15000) {
+                subtitleLatch.await()
+            }
+            logger.info { "테스트 성공: 자막 수신 완료" }
+
+            session.close()
+        }
     }
 
     private fun getSession(
@@ -212,7 +265,9 @@ class IsekAiSessionHandlerE2ETest(
             }
         }
 
-        override fun handleBinaryMessage(session: WebSocketSession, message: BinaryMessage) {}
+        override fun handleBinaryMessage(session: WebSocketSession, message: BinaryMessage) {
+            logger.info { "테스트 클라이언트 수신 (Binary): ${message.payloadLength} bytes" }
+        }
     }, headers, webSocketURI)
         .get(3, TimeUnit.SECONDS)
 

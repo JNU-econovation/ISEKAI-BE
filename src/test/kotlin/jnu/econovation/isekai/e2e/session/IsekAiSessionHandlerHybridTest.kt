@@ -9,22 +9,17 @@ import jnu.econovation.isekai.aiServer.dto.response.TTSResponse
 import jnu.econovation.isekai.aiServer.service.AiServerTTSService
 import jnu.econovation.isekai.common.security.util.JwtUtil
 import jnu.econovation.isekai.common.websocket.dto.response.TicketResponse
-import jnu.econovation.isekai.session.dto.response.MessageType.*
 import jnu.econovation.isekai.member.constant.MemberConstants.MASTER_EMAIL
 import jnu.econovation.isekai.member.dto.internal.MemberInfoDTO
 import jnu.econovation.isekai.member.repository.MemberRepository
 import jnu.econovation.isekai.session.constant.SessionConstant.INCOMING_MESSAGE_SIZE_LIMIT
 import jnu.econovation.isekai.session.dto.request.SessionTextRequest
+import jnu.econovation.isekai.session.dto.response.MessageType.*
 import jnu.econovation.isekai.session.dto.response.SessionTextResponse
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.async
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
 import mu.KotlinLogging
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -98,14 +93,14 @@ class IsekAiSessionHandlerHybridTest(
 
     @BeforeEach
     fun setup(): Unit = runBlocking {
-        given(aiServerTTSService.tts(any(), any())).willAnswer { invocation ->
+        given(aiServerTTSService.tts(any(), any(), any())).willAnswer { invocation ->
             val requestFlow = invocation.getArgument<Flow<TTSRequest>>(0)
             val readySignal = invocation.getArgument<CompletableDeferred<Unit>>(1)
 
             readySignal.complete(Unit)
 
             requestFlow.map { request ->
-                logger.info { "[Mock TTS] Gemini가 보낸 텍스트 변환 요청 수신: ${request.text}" }
+                logger.info { "[Mock TTS] Gemini가 보낸 텍스트 변환 요청 수신: ${request.prompt}" }
                 val dummyAudio = ByteArray(100) { 0xAA.toByte() }
                 TTSResponse(payload = dummyAudio, isFinal = true)
             }.onEach {
