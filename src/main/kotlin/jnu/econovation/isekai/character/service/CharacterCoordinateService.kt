@@ -56,6 +56,8 @@ class CharacterCoordinateService(
             FileName.LIVE2D_MODEL_NUKKI_FILE_NAME,
             FileName.BACKGROUND_IMAGE_FILE_NAME
         )
+
+        private const val DEFAULT_VOICE_ID = 1L
     }
 
     fun generateCharacter(
@@ -234,6 +236,16 @@ class CharacterCoordinateService(
         if (authorId != memberInfo.id) throw YouAreNotAuthorException()
 
         dataService.deleteById(id)
+    }
+
+    @Transactional
+    fun recoverVoiceIdToDefault(characterId : Long) : Result<Unit> {
+        val character = getCharacterEntity(characterId)
+            ?: return Result.failure(NoSuchCharacterException())
+
+        character.changeVoiceId(DEFAULT_VOICE_ID)
+
+        return Result.success(Unit)
     }
 
     private fun String.toUUID(): UUID = try {
