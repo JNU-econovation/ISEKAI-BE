@@ -22,7 +22,7 @@ class GeminiClient(
 ) {
     companion object {
         const val IMAGE_RATIO = "16:9"
-        const val IMAGE_SIZE = "4K"
+        const val IMAGE_SIZE = "1K"
 
         private val logger = KotlinLogging.logger {}
 
@@ -90,7 +90,7 @@ class GeminiClient(
 
     fun getImageResponse(
         prompt: String,
-        model: GeminiModel = NANO_BANANA
+        model: GeminiModel = NANO_BANANA_PRO
     ): ByteArray {
         val userContent = Content.fromParts(Part.fromText(prompt))
 
@@ -99,6 +99,8 @@ class GeminiClient(
             userContent,
             buildImageConfig(model)
         )
+
+        logger.info { "response -> $response" }
 
         val parts = response.candidates()
             .get().first()?.content()?.get()?.parts()?.getOrNull()
