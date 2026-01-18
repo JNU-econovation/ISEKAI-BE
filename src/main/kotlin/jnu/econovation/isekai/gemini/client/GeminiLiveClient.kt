@@ -13,7 +13,6 @@ import jnu.econovation.isekai.gemini.constant.function.GeminiFunctions
 import jnu.econovation.isekai.gemini.dto.client.request.GeminiInput
 import jnu.econovation.isekai.gemini.dto.client.response.GeminiOutput
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -77,6 +76,7 @@ class GeminiLiveClient(
 
     private fun buildConfig(prompt: String): LiveConnectConfig {
         return LiveConnectConfig.builder()
+            .thinkingConfig(ThinkingConfig.builder().thinkingBudget(-1).build())
             .responseModalities(Modality.Known.AUDIO)
             .inputAudioTranscription(AudioTranscriptionConfig.builder().build())
             .outputAudioTranscription(AudioTranscriptionConfig.builder().build())

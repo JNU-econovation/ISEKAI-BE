@@ -1,5 +1,6 @@
 package jnu.econovation.isekai.session.service
 
+import jnu.econovation.isekai.aiServer.dto.request.TTSRequest
 import jnu.econovation.isekai.aiServer.service.AiServerTTSService
 import jnu.econovation.isekai.character.dto.internal.CharacterDTO
 import jnu.econovation.isekai.character.service.CharacterCoordinateService
@@ -10,6 +11,7 @@ import jnu.econovation.isekai.gemini.client.GeminiLiveClient
 import jnu.econovation.isekai.gemini.constant.enums.GeminiEmotion
 import jnu.econovation.isekai.gemini.constant.enums.GeminiFunctionSignature.EMOTION
 import jnu.econovation.isekai.gemini.constant.enums.GeminiFunctionSignature.SEARCH_LONG_TERM_MEMORY_RAG
+import jnu.econovation.isekai.gemini.constant.template.SystemPromptTemplate
 import jnu.econovation.isekai.gemini.dto.client.request.GeminiInput
 import jnu.econovation.isekai.gemini.dto.client.response.GeminiFunctionParams
 import jnu.econovation.isekai.gemini.dto.client.response.GeminiOutput
@@ -57,7 +59,6 @@ class IsekAiSessionService(
         hostMemberId: Long,
         onReply: suspend (SessionResponse) -> Unit
     ) = supervisorScope {
-        aiServerReadySignal.complete(Unit)
         val characterDTO = characterService.getCharacter(characterId)
             ?: throw InternalServerException(cause = IllegalStateException("캐릭터를 찾지 못함 -> $characterId"))
 
@@ -88,23 +89,43 @@ class IsekAiSessionService(
             geminiToolInput.receiveAsFlow()
         )
 
+        val ttsInput = Channel<TTSRequest>(
+            Channel.BUFFERED,
+            BufferOverflow.SUSPEND
+        )
+
         launch { onGeminiReady(geminiReadySignal, characterDTO, hostMemberId, geminiContextInput) }
 
-        liveClient.getLiveResponse(
-            geminiReadySignal = geminiReadySignal,
-            sessionId = sessionId,
-            inputData = geminiInput,
-            prompt = prompt
-        )
-            .collect { output ->
+        val geminiJob = launch {
+            liveClient.getLiveResponse(
+                geminiReadySignal = geminiReadySignal,
+                sessionId = sessionId,
+                inputData = geminiInput,
+                prompt = SystemPromptTemplate.build(prompt)
+            ).collect { output ->
                 handleGeminiOutput(
                     output = output,
                     hostMemberId = hostMemberId,
                     character = characterDTO,
                     geminiInputChannel = geminiToolInput,
                     onReply = onReply
-                )
+                ) { ttsRequest -> ttsInput.send(ttsRequest) }
             }
+        }
+
+
+        val ttsJob = launch {
+            aiServerTTSService.tts(
+                aiServerReadySignal = aiServerReadySignal,
+                voiceId = characterDTO.voiceId,
+                requestStream = ttsInput.receiveAsFlow()
+            ).collect { onReply(SessionBinaryResponse(it.payload)) }
+        }
+
+        //Gemini Job이 끝나면 TTS도 끝내도록 (이게 없으면 DeadLock)
+        geminiJob.join()
+        ttsInput.close()
+        ttsJob.join()
     }
 
     private suspend fun onGeminiReady(
@@ -137,7 +158,8 @@ class IsekAiSessionService(
         hostMemberId: Long,
         character: CharacterDTO,
         geminiInputChannel: Channel<GeminiInput>,
-        onReply: suspend (SessionResponse) -> Unit
+        onReply: suspend (SessionResponse) -> Unit,
+        onTTSInput: suspend (TTSRequest) -> Unit
     ) {
         when (output) {
             is GeminiOutput.InputSTT -> {
@@ -149,6 +171,7 @@ class IsekAiSessionService(
             is GeminiOutput.InputOneSentenceSTT -> {
                 logger.info { "gemini input one sentence stt -> ${output.text}" }
 
+
                 onReply(SessionTextResponse.fromUserOneSentenceSubtitle(output.text))
             }
 
@@ -156,6 +179,12 @@ class IsekAiSessionService(
                 logger.info { "gemini output stt -> ${output.text}" }
 
                 onReply(SessionTextResponse.fromBotSubtitle(output.text))
+            }
+
+            is GeminiOutput.OutputOneSentenceSTT -> {
+                logger.info { "gemini output one sentence stt -> ${output.text}" }
+
+                onTTSInput(TTSRequest(output.text))
             }
 
             is GeminiOutput.Interrupted -> {
@@ -179,7 +208,7 @@ class IsekAiSessionService(
             }
 
             is GeminiOutput.VoiceStream -> {
-                onReply(SessionBinaryResponse(output.chunk))
+//                onReply(SessionBinaryResponse(output.chunk))
 
                 //todo: ai 서버 구현 되면 거기로 보내기
                 //logger.debug { "gemini output 음성 메세지 수신 -> 크기 : ${output.chunk.size}" }
@@ -199,6 +228,7 @@ class IsekAiSessionService(
                     saveChatHistory(hostMemberId, character, output)
                 }
             }
+
         }
     }
 
@@ -233,7 +263,9 @@ class IsekAiSessionService(
 
                 logger.info { "Gemini가 현재 ${params}한 감정을 느끼고 있음" }
 
-                sendOKToGemini(output, geminiInputChannel)
+                if (!output.isMock) {
+                    sendOKToGemini(output, geminiInputChannel)
+                }
 
                 val emotion = GeminiEmotion.from(params.emotion)
                     ?: run {
