@@ -2,46 +2,32 @@ package jnu.econovation.isekai.gemini.client.processor
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.genai.types.LiveServerMessage
-import jnu.econovation.isekai.gemini.constant.enums.GeminiFunctionSignature
-import jnu.econovation.isekai.gemini.dto.client.response.GeminiOutput
+import jnu.econovation.isekai.gemini.constant.enums.GeminiLiveFunctionSignature
+import jnu.econovation.isekai.gemini.dto.client.response.GeminiLiveOutput
 import mu.KotlinLogging
-import java.util.regex.Pattern
 import kotlin.jvm.optionals.getOrNull
 
 class GeminiMessageProcessor(
     private val mapper: ObjectMapper
 ) {
     private val logger = KotlinLogging.logger {}
-    private val inputSTTOneSentenceBuffer = StringBuffer()
 
-    fun process(sessionId: String, message: LiveServerMessage): List<GeminiOutput> {
-        val outputs = mutableListOf<GeminiOutput>()
+    fun process(sessionId: String, message: LiveServerMessage): List<GeminiLiveOutput> {
+        val outputs = mutableListOf<GeminiLiveOutput>()
 
-        logger.debug { "gemini received -> $message" }
+//        logger.info { "gemini received -> $message" }
 
-        message.serverContent().flatMap { it.outputTranscription() }
-            .ifPresent { transcription ->
-                logger.info { "output stt -> $transcription" }
-            }
-
-        processInputSTT(message, inputSTTOneSentenceBuffer)?.let { outputs.add(it) }
+        processInputSTT(message)?.let { outputs.add(it) }
         outputs.addAll(processFunctionCall(sessionId, message))
-        processInterrupted(message)?.let { outputs.add(it) }
 
         return outputs
     }
 
-    private fun processInputSTT(
-        message: LiveServerMessage,
-        buffer: StringBuffer
-    ): GeminiOutput.InputSTT? {
-        var result: GeminiOutput.InputSTT? = null
+    private fun processInputSTT(message: LiveServerMessage): GeminiLiveOutput.InputSTT? {
+        var result: GeminiLiveOutput.InputSTT? = null
         message.serverContent().flatMap { it.inputTranscription() }
             .ifPresent { transcription ->
-                transcription.text().ifPresent { text ->
-                    buffer.append(text)
-                    result = GeminiOutput.InputSTT(text)
-                }
+                transcription.text().ifPresent { text -> result = GeminiLiveOutput.InputSTT(text) }
             }
         return result
     }
@@ -49,8 +35,8 @@ class GeminiMessageProcessor(
     private fun processFunctionCall(
         sessionId: String,
         message: LiveServerMessage
-    ): List<GeminiOutput.FunctionCall> {
-        val functionCalls = mutableListOf<GeminiOutput.FunctionCall>()
+    ): List<GeminiLiveOutput.FunctionCall> {
+        val functionCalls = mutableListOf<GeminiLiveOutput.FunctionCall>()
 
         message.toolCall().getOrNull()?.functionCalls()?.ifPresent { calls ->
             calls.map { Triple(it.id()?.orElse(""), it.name()?.get(), it.args()?.get()) }
@@ -58,7 +44,7 @@ class GeminiMessageProcessor(
                     logger.info { "[Session:$sessionId] 함수 수신됨 - ID: $id, Name: $name, Items: $items" }
                 }
                 .forEach { (id, name, items) ->
-                    val enum = name?.let { GeminiFunctionSignature.fromText(it) }
+                    val enum = name?.let { GeminiLiveFunctionSignature.fromText(it) }
 
                     if (enum == null) {
                         logger.error { "function name error -> $name" }
@@ -73,7 +59,7 @@ class GeminiMessageProcessor(
                     }
 
                     functionCalls.add(
-                        GeminiOutput.FunctionCall(
+                        GeminiLiveOutput.FunctionCall(
                             id = id ?: "",
                             signature = enum,
                             params = params
@@ -82,14 +68,5 @@ class GeminiMessageProcessor(
                 }
         }
         return functionCalls
-    }
-
-    private fun processInterrupted(message: LiveServerMessage): GeminiOutput.Interrupted? {
-        val isInterrupted = message.serverContent().flatMap { it.interrupted() }.orElse(false)
-        if (isInterrupted) {
-            logger.info { "인터럽트 되었습니다." }
-            return GeminiOutput.Interrupted()
-        }
-        return null
     }
 }
