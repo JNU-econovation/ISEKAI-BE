@@ -7,6 +7,20 @@ import com.google.genai.types.Type
 import jnu.econovation.isekai.gemini.constant.enums.GeminiEmotion
 
 object GeminiSchema {
+    val REQUEST_REPLY_SCHEMA: Schema = Schema.builder()
+        .type(Type.Known.OBJECT)
+        .properties(
+            ImmutableMap.of(
+                "userMessage",
+                Schema.builder()
+                    .type(Type.Known.STRING)
+                    .description("사용자가 Gemini에게 말한 내용의 텍스트")
+                    .build()
+            )
+        )
+        .required(listOf("userMessage"))
+        .build()
+
     val LONG_TERM_MEMORY_RAG_PARAMS_SCHEMA: Schema = Schema.builder()
         .type(Type.Known.OBJECT)
         .properties(
@@ -32,33 +46,24 @@ object GeminiSchema {
         .description("장기기억을 RAG SEARCH 한 결과물이다. 앞에 있는 요약일 수록 유사도가 큰 요약이다.")
         .build()
 
-    val EMOTION_SCHEMA: Schema = Schema.builder()
+    val FINAL_ANSWER_SCHEMA: Schema = Schema.builder()
         .type(Type.Known.OBJECT)
         .properties(
             ImmutableMap.of(
-                "emotion",
-                Schema.builder()
-                    .type(Type.Known.STRING)
-                    .description("Gemini가 실시간으로 느끼고 있는 감정이다.")
-                    .enum_(enumValues<GeminiEmotion>().map { it.text })
-                    .build()
-            )
-        )
-        .required(listOf("emotion"))
-        .build()
-
-    val TEXT_RESPONSE_SCHEMA: Schema = Schema.builder()
-        .type(Type.Known.OBJECT)
-        .properties(
-            ImmutableMap.of(
-                "krResponseText",
+                "krTextResponse",
                 Schema.builder()
                     .description("한국어 텍스트 응답이다.")
                     .type(Type.Known.STRING)
+                    .build(),
+                "emotion",
+                Schema.builder()
+                    .description("Gemini가 느끼고 있는 감정이다. 반드시 ${enumValues<GeminiEmotion>().map { it.text }} 중 하나만 응답해야 한다.")
+                    .enum_(enumValues<GeminiEmotion>().map { it.text })
+                    .type(Type.Known.STRING)
                     .build()
             )
         )
-        .required( "krResponseText")
+        .required("krTextResponse", "emotion")
         .build()
 
     val OK_SCHEMA: Schema = Schema.builder()

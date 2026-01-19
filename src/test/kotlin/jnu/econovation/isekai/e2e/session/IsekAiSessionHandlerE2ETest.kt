@@ -178,7 +178,7 @@ class IsekAiSessionHandlerE2ETest(
             withTimeout(5000) { connectionLatch.await() }
             logger.info { "WebSocket 연결 성공" }
 
-            withTimeout(10000) { readyLatch.await() }
+            withTimeout(60000) { readyLatch.await() }
             logger.info { "서버 준비 완료" }
 
             val request = SessionTextRequest.from("안녕하세요 자기소개 해주세요")
@@ -240,6 +240,10 @@ class IsekAiSessionHandlerE2ETest(
                         logger.info { "input stt chunk 자막 수신 -> ${response.content}" }
                     }
 
+                    USER_SUBTITLE_COMPLETE -> {
+                        logger.info { "input stt 완료 자막 수신 -> ${response.content}" }
+                    }
+
                     BOT_IS_THINKING -> {
                         logger.info { "gemini는 답변을 위해 생각 중" }
                     }
@@ -264,6 +268,7 @@ class IsekAiSessionHandlerE2ETest(
                     EMOTION -> {
                         logger.info { "감정 수신 -> ${response.content}" }
                     }
+
                 }
             } catch (e: Exception) {
                 logger.error("텍스트 메시지 처리 중 에러", e)

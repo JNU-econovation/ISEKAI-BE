@@ -50,11 +50,15 @@ class TTSClient(
     ): Flow<TTSResult> = channelFlow {
         val handler = handlerFactory.createHandler(channel = this)
 
+        logger.info { "TTS 서버 웹소켓 연결 중" }
+
         val session = wsClient.execute(
             handler,
             WebSocketHttpHeaders(),
             URI("${config.webSocketUrl}/${voiceId}")
         ).await()
+
+        logger.info { "TTS 서버 웹소켓 연결 성공!" }
 
         aiServerReadySignal.complete(Unit)
         logger.info { "AI Server TTS WebSocket 연결 수립 및 신호 전송 완료" }
