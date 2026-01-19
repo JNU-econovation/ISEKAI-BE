@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.receiveAsFlow
 import mu.KotlinLogging
 import org.springframework.stereotype.Service
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 
@@ -48,7 +49,7 @@ class IsekAiSessionService(
 ) {
     private companion object {
         const val OK = "ok"
-
+        val sentenceRegex = Regex("(?<=[.?!~\n])\\s+")
         val logger = KotlinLogging.logger {}
     }
 
@@ -63,6 +64,7 @@ class IsekAiSessionService(
     ) = supervisorScope {
         val currentTurnDTO = AtomicReference<TurnCompleteDTO?>(null)
         val thinkingJob = AtomicReference<Job?>(null)
+        val isNewTurnFirstPacket = AtomicBoolean(false)
 
         val characterDTO = characterService.getCharacter(characterId)
             ?: throw InternalServerException(cause = IllegalStateException("캐릭터를 찾지 못함 -> $characterId"))
@@ -113,6 +115,7 @@ class IsekAiSessionService(
                 inputData = geminiLiveInput
             ).collect { output ->
                 handleGeminiOutput(
+                    isNewTurnFirstPacket = isNewTurnFirstPacket,
                     currentTurnDTO = currentTurnDTO,
                     characterDTO = characterDTO,
                     hostMemberId = hostMemberId,
@@ -135,14 +138,18 @@ class IsekAiSessionService(
                 ).collect { result ->
                     when (result) {
                         is TTSResult.StartStreaming -> {
-                            currentTurnDTO.get()?.let { dto ->
-                                logger.info { "TTS 스트리밍 시작 -> 텍스트 응답 전송: ${dto.bot}" }
-                                onReply(
-                                    SessionTextResponse.fromTurnComplete(
-                                        user = dto.user,
-                                        bot = dto.bot
+                            if (isNewTurnFirstPacket.compareAndSet(true, false)) {
+                                currentTurnDTO.get()?.let { dto ->
+                                    logger.info { "TTS 첫 문장 스트리밍 시작 -> 텍스트 응답 전송: ${dto.bot}" }
+                                    onReply(
+                                        SessionTextResponse.fromTurnComplete(
+                                            user = dto.user,
+                                            bot = dto.bot
+                                        )
                                     )
-                                )
+                                }
+                            } else {
+                                logger.debug { "이어지는 문장 스트리밍 시작 (클라이언트 전송 스킵)" }
                             }
                         }
 
@@ -197,6 +204,7 @@ class IsekAiSessionService(
     }
 
     private suspend fun CoroutineScope.handleGeminiOutput(
+        isNewTurnFirstPacket: AtomicBoolean,
         currentTurnDTO: AtomicReference<TurnCompleteDTO?>,
         characterDTO: CharacterDTO,
         hostMemberId: Long,
@@ -218,6 +226,7 @@ class IsekAiSessionService(
                 logger.info { "gemini live output params -> ${output.params}" }
 
                 handleFunctionCall(
+                    isNewTurnFirstPacket = isNewTurnFirstPacket,
                     currentTurnDTO = currentTurnDTO,
                     output = output,
                     geminiLiveInputChannel = geminiLiveInputChannel,
@@ -232,6 +241,7 @@ class IsekAiSessionService(
     }
 
     private suspend fun CoroutineScope.handleFunctionCall(
+        isNewTurnFirstPacket: AtomicBoolean,
         currentTurnDTO: AtomicReference<TurnCompleteDTO?>,
         output: GeminiLiveOutput.FunctionCall,
         geminiLiveInputChannel: Channel<GeminiLiveInput>,
@@ -301,7 +311,11 @@ class IsekAiSessionService(
 
                     onReply(SessionTextResponse.fromEmotion(finalResponse.emotion))
 
-                    ttsInput.send(finalResponse.krTextResponse)
+                    val chunks = finalResponse.krTextResponse.split(sentenceRegex)
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+
+                    chunks.forEach { chunk -> ttsInput.send(chunk) }
 
                     currentTurnDTO.set(
                         TurnCompleteDTO(
@@ -309,6 +323,8 @@ class IsekAiSessionService(
                             bot = finalResponse.krTextResponse
                         )
                     )
+
+                    isNewTurnFirstPacket.set(true)
 
                     launch {
                         saveChatHistory(
