@@ -8,7 +8,6 @@ import jnu.econovation.isekai.common.exception.server.InternalServerException
 import jnu.econovation.isekai.gemini.client.processor.GeminiMessageProcessor
 import jnu.econovation.isekai.gemini.config.GeminiConfig
 import jnu.econovation.isekai.gemini.constant.enums.GeminiModel
-import jnu.econovation.isekai.gemini.constant.enums.GeminiVoice
 import jnu.econovation.isekai.gemini.constant.function.GeminiFunctions
 import jnu.econovation.isekai.gemini.dto.client.request.GeminiInput
 import jnu.econovation.isekai.gemini.dto.client.response.GeminiOutput
@@ -29,10 +28,6 @@ class GeminiLiveClient(
 
     companion object {
         private val logger = KotlinLogging.logger {}
-
-        val GOOGLE_SEARCH_TOOL: Tool = Tool.builder()
-            .googleSearch(GoogleSearch.builder().build())
-            .build()
     }
 
     private val client = Client.builder()
@@ -55,7 +50,8 @@ class GeminiLiveClient(
                 geminiReadySignal.complete(Unit)
 
                 logger.info { "Gemini Live 세션이 연결되었습니다." }
-                logger.info { "프롬프트 -> $prompt" }
+
+                logger.info { "Gemini 프롬프트 : $prompt" }
 
                 val processor = GeminiMessageProcessor(mapper)
 
@@ -67,7 +63,7 @@ class GeminiLiveClient(
                         logger.error(e) { "메시지 처리 중 에러 발생" }
                     }
                 }
-                launch { send(inputData, session, processor) }
+                launch { send(inputData, session) }
                 awaitClose { onClosed(session) }
             }
         } catch (e: Exception) {
@@ -77,42 +73,31 @@ class GeminiLiveClient(
 
     private fun buildConfig(prompt: String): LiveConnectConfig {
         return LiveConnectConfig.builder()
-            .thinkingConfig(ThinkingConfig.builder().thinkingBudget(-1).build())
             .responseModalities(Modality.Known.AUDIO)
             .inputAudioTranscription(AudioTranscriptionConfig.builder().build())
             .outputAudioTranscription(AudioTranscriptionConfig.builder().build())
+            .thinkingConfig(ThinkingConfig.builder().thinkingBudget(-1).build())
             .realtimeInputConfig(buildRealTimeInputConfig())
             .systemInstruction(Content.fromParts(Part.fromText(prompt)))
             .tools(
                 listOf(
-                    GOOGLE_SEARCH_TOOL,
                     Tool.builder()
                         .functionDeclarations(
-                            listOf(GeminiFunctions.RAG_SEARCH_FUNCTION)
+                            listOf(
+                                GeminiFunctions.EMOTION_FUNCTION,
+                                GeminiFunctions.TEXT_RESPONSE_FUNCTION,
+                                GeminiFunctions.RAG_SEARCH_FUNCTION
+                            )
                         )
                         .build()
                 )
-            )
-            .speechConfig(
-                SpeechConfig.builder()
-                    .languageCode("ko-KR")
-                    .voiceConfig(
-                        VoiceConfig.builder()
-                            .prebuiltVoiceConfig(
-                                PrebuiltVoiceConfig.builder()
-                                    .voiceName(
-                                        GeminiVoice.ZEPHYR.text
-                                    ).build()
-                            ).build()
-                    )
             )
             .build()
     }
 
     private suspend fun send(
         inputData: Flow<GeminiInput>,
-        session: AsyncSession,
-        processor: GeminiMessageProcessor
+        session: AsyncSession
     ) {
         inputData.collect { data ->
             when (data) {
@@ -126,9 +111,6 @@ class GeminiLiveClient(
 
                 is GeminiInput.Text -> {
                     logger.info { "text message 전송 -> ${data.value}" }
-
-                    processor.onUserInputText(data.value)
-
                     val content = LiveSendClientContentParameters.builder()
                         .turns(listOf(Content.fromParts(Part.fromText(data.value))))
                         .turnComplete(true)
@@ -178,10 +160,10 @@ class GeminiLiveClient(
                             return@exceptionally null
                         }.await()
                 }
-
             }
         }
     }
+
 
 
     private fun onClosed(session: AsyncSession) {
@@ -193,9 +175,7 @@ class GeminiLiveClient(
         return RealtimeInputConfig.builder()
             .automaticActivityDetection(
                 AutomaticActivityDetection.builder()
-                    .startOfSpeechSensitivity(StartSensitivity.Known.START_SENSITIVITY_HIGH)
-                    .endOfSpeechSensitivity(EndSensitivity.Known.END_SENSITIVITY_HIGH)
-                    .prefixPaddingMs(1000)
+                    .startOfSpeechSensitivity(StartSensitivity.Known.START_SENSITIVITY_LOW)
                     .silenceDurationMs(config.silenceDurationMs)
             )
             .build()

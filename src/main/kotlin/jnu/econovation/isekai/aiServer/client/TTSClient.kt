@@ -1,16 +1,16 @@
 package jnu.econovation.isekai.aiServer.client
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import io.lettuce.core.internal.Futures.await
 import jakarta.websocket.ContainerProvider
 import jnu.econovation.isekai.aiServer.config.AiServerConfig
+import jnu.econovation.isekai.aiServer.dto.internal.TTSResult
 import jnu.econovation.isekai.aiServer.dto.request.TTSRequest
-import jnu.econovation.isekai.aiServer.dto.response.TTSResponse
 import jnu.econovation.isekai.aiServer.factory.AiServerWebSocketHandlerFactory
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import org.springframework.stereotype.Component
@@ -38,16 +38,16 @@ class TTSClient(
             }
         ).apply {
             // 연결/핸드셰이크 타임아웃 설정
-            // 기본값이 짧아서 Cold Start 때 터지는 것을 방지합니다. (30초로 설정)
-            userProperties["org.apache.tomcat.websocket.IO_TIMEOUT_MS"] = "30000"
+            // 기본값이 짧아서 Cold Start 때 터지는 것을 방지합니다. (60초로 설정)
+            userProperties["org.apache.tomcat.websocket.IO_TIMEOUT_MS"] = "60000"
         }
     }
 
     suspend fun tts(
         voiceId: Long,
-        requestStream: Flow<TTSRequest>,
+        requestStream: Flow<String>,
         aiServerReadySignal: CompletableDeferred<Unit>
-    ): Flow<TTSResponse> = channelFlow {
+    ): Flow<TTSResult> = channelFlow {
         val handler = handlerFactory.createHandler(channel = this)
 
         val session = wsClient.execute(
@@ -61,7 +61,9 @@ class TTSClient(
 
         launch {
             runCatching {
-                requestStream.collect { request ->
+                requestStream
+                    .map { TTSRequest(prompt = it) }
+                    .collect { request ->
                     session.sendMessage(TextMessage(mapper.writeValueAsString(request)))
                 }
                 session.sendMessage(TextMessage(END_OF_STREAM))
