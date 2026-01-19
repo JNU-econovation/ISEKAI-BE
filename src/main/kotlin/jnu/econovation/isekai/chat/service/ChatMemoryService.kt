@@ -21,7 +21,7 @@ import jnu.econovation.isekai.chat.model.vo.Speaker
 import jnu.econovation.isekai.chat.service.internal.ChatDataService
 import jnu.econovation.isekai.chat.service.internal.ConsolidatedMemoryDataService
 import jnu.econovation.isekai.common.exception.server.InternalServerException
-import jnu.econovation.isekai.gemini.client.GeminiClient
+import jnu.econovation.isekai.gemini.client.GeminiRestClient
 import jnu.econovation.isekai.gemini.constant.enums.GeminiModel
 import jnu.econovation.isekai.member.entity.Member
 import jnu.econovation.isekai.member.service.MemberService
@@ -37,7 +37,7 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class ChatMemoryService(
     private val chatService: ChatDataService,
-    private val geminiClient: GeminiClient,
+    private val geminiRestClient: GeminiRestClient,
     private val connectionFactory: RedisConnectionFactory,
     private val promptConfig: PromptConfig,
     private val mapper: ObjectMapper,
@@ -265,7 +265,7 @@ class ChatMemoryService(
         recentChatString: String,
         model: GeminiModel
     ): String {
-        return geminiClient.getTextResponse(
+        return geminiRestClient.getSummaryResponse(
             prompt = promptConfig.summarize,
             request = recentChatString,
             schema = GEMINI_SUMMARY_SCHEMA,
@@ -279,7 +279,7 @@ class ChatMemoryService(
         backoff = Backoff(delay = 2000, multiplier = 2.0)
     )
     private suspend fun embedVector(text: String, model: GeminiModel) =
-        geminiClient.getEmbedding(text, model).first().values().get().toFloatArray()
+        geminiRestClient.getEmbedding(text, model).first().values().get().toFloatArray()
 
 }
 

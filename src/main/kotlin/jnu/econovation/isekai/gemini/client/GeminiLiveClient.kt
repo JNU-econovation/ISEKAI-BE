@@ -9,8 +9,9 @@ import jnu.econovation.isekai.gemini.client.processor.GeminiMessageProcessor
 import jnu.econovation.isekai.gemini.config.GeminiConfig
 import jnu.econovation.isekai.gemini.constant.enums.GeminiModel
 import jnu.econovation.isekai.gemini.constant.function.GeminiFunctions
-import jnu.econovation.isekai.gemini.dto.client.request.GeminiInput
-import jnu.econovation.isekai.gemini.dto.client.response.GeminiOutput
+import jnu.econovation.isekai.gemini.constant.template.SystemPromptTemplate
+import jnu.econovation.isekai.gemini.dto.client.request.GeminiLiveInput
+import jnu.econovation.isekai.gemini.dto.client.response.GeminiLiveOutput
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -22,7 +23,7 @@ import org.springframework.stereotype.Component
 
 @Component
 class GeminiLiveClient(
-    private val config: GeminiConfig,
+    private val geminiConfig: GeminiConfig,
     private val mapper: ObjectMapper
 ) {
 
@@ -31,27 +32,26 @@ class GeminiLiveClient(
     }
 
     private val client = Client.builder()
-        .apiKey(config.apiKey)
+        .apiKey(geminiConfig.apiKey)
         .build()
 
     suspend fun getLiveResponse(
         geminiReadySignal: CompletableDeferred<Unit>,
         sessionId: String,
-        inputData: Flow<GeminiInput>,
-        prompt: String,
+        inputData: Flow<GeminiLiveInput>,
         model: GeminiModel = GeminiModel.GEMINI_2_5_FLASH_NATIVE_AUDIO
-    ): Flow<GeminiOutput> {
+    ): Flow<GeminiLiveOutput> {
         return try {
             callbackFlow {
                 val session = client.async.live
-                    .connect(model.toString(), buildConfig(prompt))
+                    .connect(model.toString(), buildConfig(SystemPromptTemplate.GEMINI_LIVE_TEMPLATE))
                     .await()
 
                 geminiReadySignal.complete(Unit)
 
                 logger.info { "Gemini Live 세션이 연결되었습니다." }
 
-                logger.info { "Gemini 프롬프트 : $prompt" }
+                logger.info { "Gemini 프롬프트 : ${SystemPromptTemplate.GEMINI_LIVE_TEMPLATE}" }
 
                 val processor = GeminiMessageProcessor(mapper)
 
@@ -75,20 +75,13 @@ class GeminiLiveClient(
         return LiveConnectConfig.builder()
             .responseModalities(Modality.Known.AUDIO)
             .inputAudioTranscription(AudioTranscriptionConfig.builder().build())
-            .outputAudioTranscription(AudioTranscriptionConfig.builder().build())
             .thinkingConfig(ThinkingConfig.builder().thinkingBudget(-1).build())
             .realtimeInputConfig(buildRealTimeInputConfig())
             .systemInstruction(Content.fromParts(Part.fromText(prompt)))
             .tools(
                 listOf(
                     Tool.builder()
-                        .functionDeclarations(
-                            listOf(
-                                GeminiFunctions.EMOTION_FUNCTION,
-                                GeminiFunctions.TEXT_RESPONSE_FUNCTION,
-                                GeminiFunctions.RAG_SEARCH_FUNCTION
-                            )
-                        )
+                        .functionDeclarations(listOf(GeminiFunctions.REQUEST_REPLY_FUNCTION))
                         .build()
                 )
             )
@@ -96,12 +89,12 @@ class GeminiLiveClient(
     }
 
     private suspend fun send(
-        inputData: Flow<GeminiInput>,
+        inputData: Flow<GeminiLiveInput>,
         session: AsyncSession
     ) {
         inputData.collect { data ->
             when (data) {
-                is GeminiInput.Audio -> {
+                is GeminiLiveInput.Audio -> {
                     session.sendRealtimeInput(buildAudioContent(data.chunk))
                         .exceptionally {
                             logger.error(it) { "audio chunk 보내는 중 에러 발생 -> ${it.message}" }
@@ -109,7 +102,7 @@ class GeminiLiveClient(
                         }.await()
                 }
 
-                is GeminiInput.Text -> {
+                is GeminiLiveInput.Text -> {
                     logger.info { "text message 전송 -> ${data.value}" }
                     val content = LiveSendClientContentParameters.builder()
                         .turns(listOf(Content.fromParts(Part.fromText(data.value))))
@@ -123,7 +116,7 @@ class GeminiLiveClient(
                         }.await()
                 }
 
-                is GeminiInput.Context -> {
+                is GeminiLiveInput.Context -> {
                     logger.info { "Gemini Context 전송: 단기기억 -> ${data.shortTermMemory}, 중기기억 -> ${data.midTermMemory}" }
                     val content = LiveSendClientContentParameters.builder()
                         .turns(
@@ -141,7 +134,7 @@ class GeminiLiveClient(
                         }.await()
                 }
 
-                is GeminiInput.ToolResponse -> {
+                is GeminiLiveInput.ToolResponse -> {
                     logger.info { "Tool Response 전송: ID=${data.id}, Result=${data.result}" }
 
                     val functionResponse = FunctionResponse.builder()
@@ -165,7 +158,6 @@ class GeminiLiveClient(
     }
 
 
-
     private fun onClosed(session: AsyncSession) {
         logger.info { "Flow가 닫힙니다. 세션을 종료합니다." }
         session.close()
@@ -176,7 +168,7 @@ class GeminiLiveClient(
             .automaticActivityDetection(
                 AutomaticActivityDetection.builder()
                     .startOfSpeechSensitivity(StartSensitivity.Known.START_SENSITIVITY_LOW)
-                    .silenceDurationMs(config.silenceDurationMs)
+                    .silenceDurationMs(geminiConfig.silenceDurationMs)
             )
             .build()
     }

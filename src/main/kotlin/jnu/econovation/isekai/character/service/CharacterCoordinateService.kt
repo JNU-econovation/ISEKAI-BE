@@ -25,7 +25,7 @@ import jnu.econovation.isekai.common.s3.dto.internal.PreviewDTO
 import jnu.econovation.isekai.common.s3.enums.FileName
 import jnu.econovation.isekai.common.s3.exception.UnexpectedFileSetException
 import jnu.econovation.isekai.common.s3.service.S3Service
-import jnu.econovation.isekai.gemini.client.GeminiClient
+import jnu.econovation.isekai.gemini.client.GeminiRestClient
 import jnu.econovation.isekai.gemini.constant.enums.GeminiModel
 import jnu.econovation.isekai.gemini.constant.enums.GeminiModel.NANO_BANANA
 import jnu.econovation.isekai.gemini.constant.enums.GeminiModel.NANO_BANANA_PRO
@@ -50,7 +50,7 @@ import javax.imageio.ImageIO
 @Service
 class CharacterCoordinateService(
     private val client: CharacterGenerateClient,
-    private val geminiClient: GeminiClient,
+    private val geminiRestClient: GeminiRestClient,
     private val s3Service: S3Service,
     private val memberService: MemberService,
     private val dataService: CharacterDataService
@@ -290,7 +290,7 @@ class CharacterCoordinateService(
         prompt: String,
         model: GeminiModel = NANO_BANANA_PRO
     ): ByteArray {
-        return geminiClient.getImageResponse(prompt, model)
+        return geminiRestClient.getImageResponse(prompt, model)
     }
 
 

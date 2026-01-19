@@ -29,6 +29,11 @@ data class SessionTextResponse private constructor(
             SubtitleDTO(text)
         )
 
+        fun fromUserSubtitleComplete(text: String): SessionTextResponse = SessionTextResponse(
+            MessageType.USER_SUBTITLE_COMPLETE,
+            SubtitleDTO(text)
+        )
+
         fun fromBotIsThinking(): SessionTextResponse = SessionTextResponse(
             MessageType.BOT_IS_THINKING,
             BotIsThinkingDTO()
@@ -84,6 +89,7 @@ interface SessionTextResponseContent
 enum class MessageType {
     SERVER_READY,
     USER_SUBTITLE_CHUNK,
+    USER_SUBTITLE_COMPLETE,
     BOT_IS_THINKING,
     BOT_SUBTITLE,
     INTERRUPTED,
