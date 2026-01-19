@@ -55,6 +55,7 @@ class GeminiLiveClient(
                 geminiReadySignal.complete(Unit)
 
                 logger.info { "Gemini Live 세션이 연결되었습니다." }
+                logger.info { "프롬프트 -> $prompt" }
 
                 val processor = GeminiMessageProcessor(mapper)
 
@@ -87,10 +88,7 @@ class GeminiLiveClient(
                     GOOGLE_SEARCH_TOOL,
                     Tool.builder()
                         .functionDeclarations(
-                            listOf(
-                                GeminiFunctions.EMOTION_FUNCTION,
-                                GeminiFunctions.RAG_SEARCH_FUNCTION
-                            )
+                            listOf(GeminiFunctions.RAG_SEARCH_FUNCTION)
                         )
                         .build()
                 )
