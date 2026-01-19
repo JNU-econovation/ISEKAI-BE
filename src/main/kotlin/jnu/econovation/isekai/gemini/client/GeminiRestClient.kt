@@ -28,6 +28,18 @@ class GeminiRestClient(
         const val IMAGE_RATIO = "16:9"
         const val IMAGE_SIZE = "1K"
 
+        private val SAFETY_SETTINGS = listOf(
+            HarmCategory.Known.HARM_CATEGORY_HARASSMENT,
+            HarmCategory.Known.HARM_CATEGORY_HATE_SPEECH,
+            HarmCategory.Known.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+            HarmCategory.Known.HARM_CATEGORY_DANGEROUS_CONTENT
+        ).map { category ->
+            SafetySetting.builder()
+                .category(category)
+                .threshold(HarmBlockThreshold.Known.BLOCK_ONLY_HIGH)
+                .build()
+        }
+
         private val logger = KotlinLogging.logger {}
 
         private val embeddingConfig = EmbedContentConfig.builder()
@@ -226,6 +238,7 @@ class GeminiRestClient(
             .thinkingConfig(ThinkingConfig.builder().thinkingBudget(thinkingBudget).build())
             .topP(topP)
             .temperature(temperature)
+            .safetySettings(SAFETY_SETTINGS)
 
         if (tools != null) {
             building.tools(tools)
