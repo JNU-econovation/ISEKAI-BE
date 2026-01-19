@@ -10,13 +10,13 @@ import jnu.econovation.isekai.chat.service.ChatMemoryService
 import jnu.econovation.isekai.common.exception.server.InternalServerException
 import jnu.econovation.isekai.gemini.client.GeminiLiveClient
 import jnu.econovation.isekai.gemini.constant.enums.GeminiEmotion
+import jnu.econovation.isekai.gemini.constant.enums.GeminiFunctionSignature.*
 import jnu.econovation.isekai.gemini.constant.enums.GeminiFunctionSignature.EMOTION
 import jnu.econovation.isekai.gemini.constant.enums.GeminiFunctionSignature.SEARCH_LONG_TERM_MEMORY_RAG
 import jnu.econovation.isekai.gemini.constant.template.SystemPromptTemplate
 import jnu.econovation.isekai.gemini.dto.client.request.GeminiInput
 import jnu.econovation.isekai.gemini.dto.client.response.GeminiFunctionParams
 import jnu.econovation.isekai.gemini.dto.client.response.GeminiOutput
-import jnu.econovation.isekai.prompt.service.PromptService
 import jnu.econovation.isekai.session.dto.request.SessionBinaryRequest
 import jnu.econovation.isekai.session.dto.request.SessionRequest
 import jnu.econovation.isekai.session.dto.request.SessionTextRequest
@@ -41,7 +41,6 @@ import org.springframework.stereotype.Service
 class IsekAiSessionService(
     private val liveClient: GeminiLiveClient,
     private val memoryService: ChatMemoryService,
-    private val promptService: PromptService,
     private val aiServerTTSService: AiServerTTSService,
     private val characterService: CharacterCoordinateService
 ) {
@@ -62,8 +61,6 @@ class IsekAiSessionService(
     ) = supervisorScope {
         val characterDTO = characterService.getCharacter(characterId)
             ?: throw InternalServerException(cause = IllegalStateException("캐릭터를 찾지 못함 -> $characterId"))
-
-        val prompt = promptService.getPrompt(characterDTO)
 
         val realtimeInput = inputStream.map {
             when (it) {
@@ -102,7 +99,7 @@ class IsekAiSessionService(
                 geminiReadySignal = geminiReadySignal,
                 sessionId = sessionId,
                 inputData = geminiInput,
-                prompt = SystemPromptTemplate.build(prompt)
+                prompt = SystemPromptTemplate.build(characterDTO.persona.value)
             ).collect { output ->
                 handleGeminiOutput(
                     output = output,
@@ -190,15 +187,18 @@ class IsekAiSessionService(
             }
 
             is GeminiOutput.OutputSTT -> {
-                logger.info { "gemini output stt -> ${output.text}" }
+//                logger.info { "gemini output stt -> ${output.text}" }
+//
+//                onReply(SessionTextResponse.fromBotSubtitle(output.text))
 
-                onReply(SessionTextResponse.fromBotSubtitle(output.text))
+                /* no-op */
             }
 
             is GeminiOutput.OutputOneSentenceSTT -> {
                 logger.info { "gemini output one sentence stt -> ${output.text}" }
-
-                onTTSInput(TTSRequest(output.text))
+//
+//                onTTSInput(TTSRequest(output.text))
+                /* no-op */
             }
 
             is GeminiOutput.Interrupted -> {
@@ -217,26 +217,26 @@ class IsekAiSessionService(
                     hostMemberId = hostMemberId,
                     character = character,
                     geminiInputChannel = geminiInputChannel,
+                    onTTSInput = onTTSInput,
                     onReply = onReply
                 )
             }
 
-            is GeminiOutput.VoiceStream -> { /* no-op */
-            }
+            is GeminiOutput.VoiceStream -> { /* no-op */ }
 
             is GeminiOutput.TurnComplete -> {
                 logger.info { "gemini output turn complete -> ${output.inputSTT}, ${output.outputSTT}" }
-
-                val response = SessionTextResponse.fromTurnComplete(
-                    user = output.inputSTT,
-                    bot = output.outputSTT
-                )
-
-                onReply(response)
-
-                launch {
-                    saveChatHistory(hostMemberId, character, output)
-                }
+//
+//                val response = SessionTextResponse.fromTurnComplete(
+//                    user = output.inputSTT,
+//                    bot = output.outputSTT
+//                )
+//
+//                onReply(response)
+//
+//                launch {
+//                    saveChatHistory(hostMemberId, character, output)
+//                }
             }
 
         }
@@ -247,6 +247,7 @@ class IsekAiSessionService(
         hostMemberId: Long,
         character: CharacterDTO,
         geminiInputChannel: Channel<GeminiInput>,
+        onTTSInput: suspend (TTSRequest) -> Unit,
         onReply: suspend (SessionTextResponse) -> Unit
     ) {
         when (output.signature) {
@@ -284,6 +285,14 @@ class IsekAiSessionService(
                     }
 
                 onReply(SessionTextResponse.fromEmotion(emotion))
+            }
+
+            RESPONSE_TEXT -> {
+                val params = output.params as GeminiFunctionParams.ResponseText
+
+                sendOKToGemini(output, geminiInputChannel)
+
+                onTTSInput(TTSRequest(prompt = params.krText))
             }
         }
     }
