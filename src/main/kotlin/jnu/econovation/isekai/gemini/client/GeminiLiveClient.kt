@@ -89,6 +89,7 @@ class GeminiLiveClient(
                         .functionDeclarations(
                             listOf(
                                 GeminiFunctions.EMOTION_FUNCTION,
+                                GeminiFunctions.TEXT_RESPONSE_FUNCTION,
                                 GeminiFunctions.RAG_SEARCH_FUNCTION
                             )
                         )

@@ -46,4 +46,18 @@ object GeminiSchema {
         )
         .required(listOf("emotion"))
         .build()
+
+    val TEXT_RESPONSE_SCHEMA: Schema = Schema.builder()
+        .type(Type.Known.OBJECT)
+        .properties(
+            ImmutableMap.of(
+                "krText",
+                Schema.builder()
+                    .description("한국어 텍스트 응답이다.")
+                    .type(Type.Known.STRING)
+                    .build()
+            )
+        )
+        .required("krText")
+        .build()
 }
