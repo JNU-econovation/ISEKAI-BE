@@ -32,7 +32,7 @@ class TTSClient(
             ContainerProvider.getWebSocketContainer().apply {
                 defaultMaxBinaryMessageBufferSize = 1024 * 1024
                 defaultMaxTextMessageBufferSize = 1024 * 1024
-                defaultMaxSessionIdleTimeout = 60000
+                defaultMaxSessionIdleTimeout = 1800000
 
                 setAsyncSendTimeout(30000)
             }
