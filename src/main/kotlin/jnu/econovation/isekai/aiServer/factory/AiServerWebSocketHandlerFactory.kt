@@ -1,7 +1,7 @@
 package jnu.econovation.isekai.aiServer.factory
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import jnu.econovation.isekai.aiServer.dto.response.TTSResponse
+import jnu.econovation.isekai.aiServer.dto.internal.TTSResult
 import jnu.econovation.isekai.aiServer.handler.AiServerWebSocketHandler
 import kotlinx.coroutines.channels.SendChannel
 import org.springframework.stereotype.Component
@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component
 class AiServerWebSocketHandlerFactory(
     private val mapper: ObjectMapper
 ) {
-    fun createHandler(channel: SendChannel<TTSResponse>): AiServerWebSocketHandler {
+    fun createHandler(channel: SendChannel<TTSResult>): AiServerWebSocketHandler {
         return AiServerWebSocketHandler(channel, mapper)
     }
 }

@@ -29,14 +29,9 @@ data class SessionTextResponse private constructor(
             SubtitleDTO(text)
         )
 
-        fun fromUserOneSentenceSubtitle(text: String): SessionTextResponse = SessionTextResponse(
-            MessageType.USER_ONE_SENTENCE_SUBTITLE,
-            SubtitleDTO(text)
-        )
-
-        fun fromBotSubtitle(text: String): SessionTextResponse = SessionTextResponse(
-            MessageType.BOT_SUBTITLE,
-            SubtitleDTO(text)
+        fun fromBotIsThinking(): SessionTextResponse = SessionTextResponse(
+            MessageType.BOT_IS_THINKING,
+            BotIsThinkingDTO()
         )
 
         fun fromInterrupted(): SessionTextResponse = SessionTextResponse(
@@ -79,6 +74,7 @@ data class SessionTextResponse private constructor(
     JsonSubTypes.Type(value = ServerReadyDTO::class, name = "serverReady"),
     JsonSubTypes.Type(value = SubtitleDTO::class, name = "subtitle"),
     JsonSubTypes.Type(value = TurnCompleteSubtitleDTO::class, name = "turnComplete"),
+    JsonSubTypes.Type(value = BotIsThinkingDTO::class, name = "botIsThinking"),
     JsonSubTypes.Type(value = InterruptedDTO::class, name = "interrupted"),
     JsonSubTypes.Type(value = SessionTextErrorDTO::class, name = "error"),
     JsonSubTypes.Type(value = EmotionDTO::class, name = "emotion")
@@ -88,7 +84,7 @@ interface SessionTextResponseContent
 enum class MessageType {
     SERVER_READY,
     USER_SUBTITLE_CHUNK,
-    USER_ONE_SENTENCE_SUBTITLE,
+    BOT_IS_THINKING,
     BOT_SUBTITLE,
     INTERRUPTED,
     TURN_COMPLETE,
@@ -103,6 +99,10 @@ data class ServerReadyDTO(
 data class SessionTextErrorDTO(
     val errorCode: String,
     val message: String
+) : SessionTextResponseContent
+
+data class BotIsThinkingDTO(
+    val text: String = "I'M THINKING"
 ) : SessionTextResponseContent
 
 data class SubtitleDTO(

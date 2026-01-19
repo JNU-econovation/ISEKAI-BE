@@ -6,6 +6,7 @@ import kotlin.reflect.KClass
 enum class GeminiFunctionSignature(
     val paramsType: KClass<out GeminiFunctionParams>
 ) {
+    RESPONSE_TEXT(GeminiFunctionParams.ResponseText::class),
     SEARCH_LONG_TERM_MEMORY_RAG(GeminiFunctionParams.SearchLongTermMemoryRAG::class),
     EMOTION(GeminiFunctionParams.Emotion::class);
 
