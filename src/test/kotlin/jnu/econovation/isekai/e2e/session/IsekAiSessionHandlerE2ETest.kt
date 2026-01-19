@@ -77,6 +77,7 @@ class IsekAiSessionHandlerE2ETest(
 
     private lateinit var readyLatch: CompletableDeferred<Unit>
     private lateinit var turnCompleteLatch: CompletableDeferred<Unit>
+    private lateinit var thinkingLatch: CompletableDeferred<Unit>
 
     @BeforeEach
     fun setUp() {
@@ -101,6 +102,8 @@ class IsekAiSessionHandlerE2ETest(
         val connectionLatch = CompletableDeferred<Unit>()
         readyLatch = CompletableDeferred()
         turnCompleteLatch = CompletableDeferred()
+        thinkingLatch = CompletableDeferred()
+
 
         val session = getSession(connectionLatch, webSocketHeaders)
 
@@ -154,6 +157,10 @@ class IsekAiSessionHandlerE2ETest(
             // 5. 마무리
             logger.info { "음성 스트리밍 끝!" }
             withTimeout(30000) {
+                thinkingLatch.await()
+            }
+
+            withTimeout(20000) {
                 turnCompleteLatch.await()
             }
 
@@ -204,9 +211,11 @@ class IsekAiSessionHandlerE2ETest(
                 logger.info { "침묵 패킷 전송 완료 ($silenceDurationMs ms)" }
             }.await()
 
+            withTimeout(30000) {
+                thinkingLatch.await()
+            }
 
-
-            withTimeout(15000) {
+            withTimeout(20000) {
                 turnCompleteLatch.await()
             }
             logger.info { "테스트 성공: 자막 수신 완료" }
@@ -245,6 +254,7 @@ class IsekAiSessionHandlerE2ETest(
                     }
 
                     BOT_IS_THINKING -> {
+                        thinkingLatch.complete(Unit)
                         logger.info { "gemini는 답변을 위해 생각 중" }
                     }
 
