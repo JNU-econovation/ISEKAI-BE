@@ -18,7 +18,8 @@ class GeminiMessageProcessor(
     private val logger = KotlinLogging.logger {}
     private val sentenceSplitPattern = Pattern.compile("(?<=[.!?\n])")
     private val emotionRegex = Regex(
-        "(?i)\\b(?:emotion\\s+|\\()?(HAPPY|SAD|ANGRY|SURPRISED|SHY|DESPISE|NEUTRAL)\\)?\\b"
+        """\[(HAPPY|SAD|ANGRY|SURPRISED|SHY|DESPISE|NEUTRAL)]""",
+        RegexOption.IGNORE_CASE
     )
     private val inputSTTOneSentenceBuffer = StringBuffer()
     private val inputSTTSentencesBuffer = StringBuffer()
