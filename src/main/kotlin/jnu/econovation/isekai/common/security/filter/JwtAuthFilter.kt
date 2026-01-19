@@ -38,7 +38,8 @@ class JwtAuthFilter(
 
         private val BLACKLIST = setOf(
             "/websocket/ticket",
-            "/me/**"
+            "/me/**",
+            "/characters/*/chats/**"
         )
 
         private val GREYLIST = setOf(
@@ -63,8 +64,10 @@ class JwtAuthFilter(
     ) {
 
         val isGreyList = GREYLIST
-            .stream()
-            .anyMatch { pathMatcher.match(it, request.requestURI) }
+            .any { pathMatcher.match(it, request.requestURI) }
+
+        val isBlackList = BLACKLIST
+            .any { pathMatcher.match(it, request.requestURI) }
 
         val isGetMethod = request.method == HttpMethod.GET.name()
 
@@ -77,7 +80,7 @@ class JwtAuthFilter(
                 filterChain.doFilter(request, response)
             }
             .onFailure { exception ->
-                if (isGreyList && isGetMethod) {
+                if (isGreyList && isGetMethod && !isBlackList) {
                     SecurityContextHolder.clearContext()
                     filterChain.doFilter(request, response)
                 } else {
