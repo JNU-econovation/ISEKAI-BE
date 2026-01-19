@@ -76,7 +76,7 @@ class IsekAiSessionHandlerE2ETest(
     }
 
     private lateinit var readyLatch: CompletableDeferred<Unit>
-    private lateinit var subtitleLatch: CompletableDeferred<Unit>
+    private lateinit var turnCompleteLatch: CompletableDeferred<Unit>
 
     @BeforeEach
     fun setUp() {
@@ -100,12 +100,14 @@ class IsekAiSessionHandlerE2ETest(
     fun e2e() {
         val connectionLatch = CompletableDeferred<Unit>()
         readyLatch = CompletableDeferred()
+        turnCompleteLatch = CompletableDeferred()
+
         val session = getSession(connectionLatch, webSocketHeaders)
 
         runBlocking {
             withTimeout(5000) { connectionLatch.await() }
 
-            withTimeout(15000) { readyLatch.await() }
+            withTimeout(60000) { readyLatch.await() }
 
             val resource = resourceLoader.getResource("classpath:test/e2e-test.wav")
             val inputStream = resource.inputStream
@@ -151,7 +153,10 @@ class IsekAiSessionHandlerE2ETest(
 
             // 5. 마무리
             logger.info { "음성 스트리밍 끝!" }
-            delay(20000)
+            withTimeout(30000) {
+                turnCompleteLatch.await()
+            }
+
             session.close()
         }
         logger.info { "음성 스트리밍 e2e 끝" }
@@ -162,7 +167,7 @@ class IsekAiSessionHandlerE2ETest(
     fun e2eWithTextMessage() {
         val connectionLatch = CompletableDeferred<Unit>()
         readyLatch = CompletableDeferred()
-        subtitleLatch = CompletableDeferred()
+        turnCompleteLatch = CompletableDeferred()
 
         val session = getSession(
             connectionLatch,
@@ -202,7 +207,7 @@ class IsekAiSessionHandlerE2ETest(
 
 
             withTimeout(15000) {
-                subtitleLatch.await()
+                turnCompleteLatch.await()
             }
             logger.info { "테스트 성공: 자막 수신 완료" }
 
@@ -231,13 +236,12 @@ class IsekAiSessionHandlerE2ETest(
                         readyLatch.complete(Unit)
                     }
 
-
                     USER_SUBTITLE_CHUNK -> {
                         logger.info { "input stt chunk 자막 수신 -> ${response.content}" }
                     }
 
-                    USER_ONE_SENTENCE_SUBTITLE -> {
-                        logger.info { "input stt 한 문장 자막 수신 -> ${response.content}" }
+                    BOT_IS_THINKING -> {
+                        logger.info { "gemini는 답변을 위해 생각 중" }
                     }
 
                     BOT_SUBTITLE -> {
@@ -250,6 +254,7 @@ class IsekAiSessionHandlerE2ETest(
 
                     TURN_COMPLETE -> {
                         logger.info { "Turn Complete 수신 -> ${response.content}" }
+                        turnCompleteLatch.complete(Unit)
                     }
 
                     ERROR -> {

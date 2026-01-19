@@ -2,9 +2,11 @@ package jnu.econovation.isekai.aiServer.handler
 
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
-import jnu.econovation.isekai.aiServer.dto.response.AiServerErrorResponse
-import jnu.econovation.isekai.aiServer.dto.response.TTSResponse
+import com.fasterxml.jackson.module.kotlin.readValue
+import jnu.econovation.isekai.aiServer.dto.internal.TTSResult
+import jnu.econovation.isekai.aiServer.dto.response.TTSTextResponse
 import jnu.econovation.isekai.aiServer.exception.NoSuchVoiceException
+import jnu.econovation.isekai.common.exception.BusinessException
 import jnu.econovation.isekai.common.exception.server.InternalServerException
 import kotlinx.coroutines.channels.SendChannel
 import org.springframework.web.socket.BinaryMessage
@@ -14,7 +16,7 @@ import org.springframework.web.socket.WebSocketSession
 import org.springframework.web.socket.handler.TextWebSocketHandler
 
 class AiServerWebSocketHandler(
-    private val aiServerChannel: SendChannel<TTSResponse>,
+    private val aiServerChannel: SendChannel<TTSResult>,
     private val mapper: ObjectMapper
 ) : TextWebSocketHandler() {
 
@@ -28,67 +30,45 @@ class AiServerWebSocketHandler(
 
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
         val payload = message.payload
-
-        logger.debug { "AI 서버 텍스트 메세지 수신 -> $payload" }
+        logger.info { "AI 서버 메시지 수신: $payload" }
 
         runCatching {
-            val rootNode = mapper.readTree(payload)
+            when (val response = mapper.readValue<TTSTextResponse>(payload)) {
+                is TTSTextResponse.ErrorResponse -> {
+                    logger.error { "AI 서버 에러 발생: Code=${response.code}, Msg=${response.message}" }
 
-            if (rootNode.has("status") && rootNode["status"].asText() == "error") {
+                    val exception = handleTTSResponseError(response)
 
-                val errorResponse = mapper.treeToValue(rootNode, AiServerErrorResponse::class.java)
-
-                logger.error { "AI 서버 에러 발생: Code=${errorResponse.code}, Msg=${errorResponse.message}" }
-
-                val exception = when (errorResponse.code) {
-                    "400_001", "500_001", "500_002", "500_999" -> {
-                        InternalServerException(cause = IllegalStateException(errorResponse.message))
-                    }
-                    "400_002" -> {
-                        NoSuchVoiceException()
-                    }
-                    else -> {
-                        InternalServerException(cause = IllegalStateException("Unknown Error: ${errorResponse.message}"))
-                    }
+                    aiServerChannel.close(exception)
+                    session.close(CloseStatus.SERVER_ERROR)
                 }
 
-                aiServerChannel.close(exception)
-                session.close(CloseStatus.SERVER_ERROR)
-                return@runCatching
-            }
+                is TTSTextResponse.GeneralResponse -> {
+                    logger.info { "AI 서버 상태 메시지 수신: ${response.status}" }
 
-            logger.info { "AI 서버 상태/일반 메시지: $payload" }
+                    if (response.status == "streaming") {
+                        aiServerChannel.trySend(TTSResult.StartStreaming())
+                    }
+                }
+            }
 
         }.onFailure {
             when (it) {
-                is JsonProcessingException -> {
-                    logger.warn { "JSON 형식이 아닌 메시지 수신: $payload" }
-                }
-                else -> {
-                    logger.error(it) { "텍스트 메시지 처리 중 알 수 없는 에러" }
-                }
+                is JsonProcessingException -> logger.warn { "잘못된 JSON 형식: $payload" }
+                else -> logger.error(it) { "메시지 처리 중 예외 발생" }
             }
         }
     }
 
     override fun handleBinaryMessage(session: WebSocketSession, message: BinaryMessage) {
-        logger.debug { "AI 서버 TTS 결과 수신 -> binary message size : ${message.payloadLength}" }
+        logger.info { "AI 서버 TTS 결과 수신 -> binary message size : ${message.payloadLength}" }
 
         val buffer = message.payload
-
-        if (message.payloadLength == 0) {
-            aiServerChannel.trySend(
-                TTSResponse(isFinal = true, payload = ByteArray(0))
-            )
-            return
-        }
 
         val bytes = ByteArray(buffer.remaining())
         buffer.get(bytes)
 
-        aiServerChannel.trySend(
-            TTSResponse(isFinal = false, payload = bytes)
-        )
+        aiServerChannel.trySend(TTSResult.Voice(bytes))
     }
 
     override fun afterConnectionClosed(session: WebSocketSession, status: CloseStatus) {
@@ -101,4 +81,20 @@ class AiServerWebSocketHandler(
         aiServerChannel.close(exception)
     }
 
+    private fun handleTTSResponseError(response: TTSTextResponse.ErrorResponse): BusinessException {
+        val exception = when (response.code) {
+            "400_001", "500_001", "500_002", "500_999" -> {
+                InternalServerException(cause = IllegalStateException(response.message))
+            }
+
+            "400_002" -> {
+                NoSuchVoiceException()
+            }
+
+            else -> {
+                InternalServerException(cause = IllegalStateException("Unknown Error: ${response.message}"))
+            }
+        }
+        return exception
+    }
 }

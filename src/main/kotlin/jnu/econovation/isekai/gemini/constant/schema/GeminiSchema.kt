@@ -51,13 +51,25 @@ object GeminiSchema {
         .type(Type.Known.OBJECT)
         .properties(
             ImmutableMap.of(
-                "krText",
+                "krResponseText",
                 Schema.builder()
                     .description("한국어 텍스트 응답이다.")
                     .type(Type.Known.STRING)
                     .build()
             )
         )
-        .required("krText")
+        .required( "krResponseText")
+        .build()
+
+    val OK_SCHEMA: Schema = Schema.builder()
+        .type(Type.Known.OBJECT)
+        .properties(
+            ImmutableMap.of(
+                "result",
+                Schema.builder()
+                    .type(Type.Known.STRING)
+                    .build()
+            )
+        )
         .build()
 }

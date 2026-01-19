@@ -18,17 +18,16 @@ object GeminiFunctions {
         .build()
 
     val EMOTION_FUNCTION: FunctionDeclaration = FunctionDeclaration.builder()
-        .description("Gemini의 현재 감정 상태를 업데이트합니다. 대답을 위한 함수를 호출하기 전에 이 함수를 가장 먼저 호출하여 표정을 설정해야 합니다.")
+        .description("Gemini의 현재 감정 상태를 업데이트합니다.")
         .name(EMOTION.text)
         .parameters(EMOTION_SCHEMA)
-        .behavior(Behavior.Known.BLOCKING)
+        .behavior(Behavior.Known.NON_BLOCKING)
         .build()
 
-    val TEXT_RESPONSE_FUNCTION: FunctionDeclaration =
-        FunctionDeclaration.builder()
-            .name(RESPONSE_TEXT.text)
-            .description("한국어로 대답한다.")
-            .behavior(Behavior.Known.BLOCKING)
-            .parameters(TEXT_RESPONSE_SCHEMA)
-            .build()
+    val TEXT_RESPONSE_FUNCTION: FunctionDeclaration = FunctionDeclaration.builder()
+        .name(RESPONSE_TEXT.text)
+        .description("한국어로 대답한다.")
+        .parameters(TEXT_RESPONSE_SCHEMA)
+        .behavior(Behavior.Known.NON_BLOCKING)
+        .build()
 }
