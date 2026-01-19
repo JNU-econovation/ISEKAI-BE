@@ -194,6 +194,8 @@ class GeminiLiveClient(
             .automaticActivityDetection(
                 AutomaticActivityDetection.builder()
                     .startOfSpeechSensitivity(StartSensitivity.Known.START_SENSITIVITY_HIGH)
+                    .endOfSpeechSensitivity(EndSensitivity.Known.END_SENSITIVITY_HIGH)
+                    .prefixPaddingMs(1000)
                     .silenceDurationMs(config.silenceDurationMs)
             )
             .build()
