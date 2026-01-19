@@ -167,7 +167,7 @@ class GeminiLiveClient(
         return RealtimeInputConfig.builder()
             .automaticActivityDetection(
                 AutomaticActivityDetection.builder()
-                    .startOfSpeechSensitivity(StartSensitivity.Known.START_SENSITIVITY_LOW)
+                    .startOfSpeechSensitivity(StartSensitivity.Known.START_SENSITIVITY_HIGH)
                     .silenceDurationMs(geminiConfig.silenceDurationMs)
             )
             .build()

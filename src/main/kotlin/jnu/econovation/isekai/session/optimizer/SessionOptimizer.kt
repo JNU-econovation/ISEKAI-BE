@@ -9,7 +9,7 @@ import java.util.concurrent.atomic.AtomicLong
 class SessionOptimizer(
     private val session: WebSocketSession,
     private val scope: CoroutineScope,
-    private val timeoutMs: Long = 120_000L
+    private val timeoutMs: Long = 1_800_000L
 ) {
     private val logger = KotlinLogging.logger {}
     private val lastActiveTime = AtomicLong(System.currentTimeMillis()) // 마지막 활동 시간
