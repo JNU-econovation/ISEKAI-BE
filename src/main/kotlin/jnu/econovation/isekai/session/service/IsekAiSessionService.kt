@@ -76,7 +76,7 @@ class IsekAiSessionService(
                 }
 
                 is SessionTextRequest -> {
-                    GeminiLiveInput.Text(it.content.text)
+                    GeminiLiveInput.Text("[TEXT_INPUT] ${it.content.text}")
                 }
             }
         }
