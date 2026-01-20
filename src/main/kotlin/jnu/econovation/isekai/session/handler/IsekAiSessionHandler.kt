@@ -5,7 +5,6 @@ import com.fasterxml.jackson.module.kotlin.readValue
 import jnu.econovation.isekai.common.exception.client.ClientException
 import jnu.econovation.isekai.common.exception.enums.ErrorCode
 import jnu.econovation.isekai.common.exception.server.InternalServerException
-import jnu.econovation.isekai.common.util.AudioUtil
 import jnu.econovation.isekai.common.websocket.constant.WebSocketConstant.MEMBER_ID_KEY
 import jnu.econovation.isekai.session.constant.SessionConstant
 import jnu.econovation.isekai.session.constant.SessionConstant.STREAM_BUFFER_SIZE
@@ -159,12 +158,12 @@ class IsekAiSessionHandler(
 
         message.payload.get(bytes)
 
-        if (AudioUtil.isSilence(bytes)) {
-            val silenceBytes = ByteArray(payloadSize)
-
-            clientInputStream.trySend(SessionBinaryRequest(silenceBytes))
-            return
-        }
+//        if (AudioUtil.isSilence(bytes)) {
+//            val silenceBytes = ByteArray(payloadSize)
+//
+//            clientInputStream.trySend(SessionBinaryRequest(silenceBytes))
+//            return
+//        }
 
         session.optimizer.refresh()
 
