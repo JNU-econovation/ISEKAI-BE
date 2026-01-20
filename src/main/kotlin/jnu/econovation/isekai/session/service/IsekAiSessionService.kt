@@ -311,9 +311,19 @@ class IsekAiSessionService(
 
                     onReply(SessionTextResponse.fromEmotion(finalResponse.emotion))
 
-                    val chunks = finalResponse.krTextResponse.split(sentenceRegex)
+                    val rawChunks = finalResponse.krTextResponse.split(sentenceRegex)
                         .map { it.trim() }
                         .filter { it.isNotEmpty() }
+
+                    val chunks = rawChunks.fold(mutableListOf<String>()) { acc, sentence ->
+                        if (acc.isNotEmpty() && acc.last().length <= 10) {
+                            val lastIdx = acc.size - 1
+                            acc[lastIdx] = "${acc[lastIdx]} $sentence"
+                        } else {
+                            acc.add(sentence)
+                        }
+                        acc
+                    }
 
                     chunks.forEach { chunk -> ttsInput.send(chunk) }
 

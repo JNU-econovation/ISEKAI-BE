@@ -54,6 +54,11 @@ class GeminiRestClient(
         private val FINAL_ANSWER_TOOL: Tool = Tool.builder()
             .functionDeclarations(listOf(GeminiFunctions.FINAL_ANSWER_FUNCTION))
             .build()
+
+        private val GEMINI_3_THINKING_CONFIG = ThinkingConfig
+            .builder()
+            .thinkingLevel(ThinkingLevel.Known.LOW)
+            .build()
     }
 
     private val nanoBananaConfig = GenerateContentConfig.builder()
@@ -122,8 +127,9 @@ class GeminiRestClient(
         logger.info { "rest user message -> $userMessage" }
 
         val systemInstruction = Content.fromParts(Part.fromText(systemPrompt))
-        val tools: List<Tool> = if (functionResponse == null) listOf(RAG_SEARCH_TOOL, FINAL_ANSWER_TOOL)
-        else listOf(FINAL_ANSWER_TOOL)
+        val tools: List<Tool> =
+            if (functionResponse == null) listOf(RAG_SEARCH_TOOL, FINAL_ANSWER_TOOL)
+            else listOf(FINAL_ANSWER_TOOL)
 
         val userRequestPart = Part.fromText(makeUserPrompt(context, userMessage))
 
@@ -140,7 +146,8 @@ class GeminiRestClient(
 
         val config = buildConfig(
             systemInstruction = systemInstruction,
-            tools = tools
+            tools = tools,
+            thinkingConfig = GEMINI_3_THINKING_CONFIG
         )
 
         val response = client.async.models
@@ -227,18 +234,21 @@ class GeminiRestClient(
     private fun buildConfig(
         systemInstruction: Content,
         schema: Schema? = null,
-        thinkingBudget: Int = -1,
         topP: Float = 1.0f,
         temperature: Float = 1.1f,
-        tools: List<Tool>? = null
+        tools: List<Tool>? = null,
+        thinkingConfig: ThinkingConfig? = null
     ): GenerateContentConfig {
         val building = GenerateContentConfig.builder()
             .systemInstruction(systemInstruction)
             .candidateCount(1)
-            .thinkingConfig(ThinkingConfig.builder().thinkingBudget(thinkingBudget).build())
             .topP(topP)
             .temperature(temperature)
             .safetySettings(SAFETY_SETTINGS)
+
+        if (thinkingConfig != null) {
+            building.thinkingConfig(thinkingConfig)
+        }
 
         if (tools != null) {
             building.tools(tools)
