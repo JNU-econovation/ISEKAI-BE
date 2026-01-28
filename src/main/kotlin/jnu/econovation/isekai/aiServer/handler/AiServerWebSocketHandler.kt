@@ -3,7 +3,7 @@ package jnu.econovation.isekai.aiServer.handler
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
-import jnu.econovation.isekai.aiServer.dto.internal.TTSResult
+import jnu.econovation.isekai.aiServer.dto.internal.TTSOutput
 import jnu.econovation.isekai.aiServer.dto.response.TTSTextResponse
 import jnu.econovation.isekai.aiServer.exception.NoSuchVoiceException
 import jnu.econovation.isekai.common.exception.BusinessException
@@ -16,7 +16,7 @@ import org.springframework.web.socket.WebSocketSession
 import org.springframework.web.socket.handler.TextWebSocketHandler
 
 class AiServerWebSocketHandler(
-    private val aiServerChannel: SendChannel<TTSResult>,
+    private val aiServerChannel: SendChannel<TTSOutput>,
     private val mapper: ObjectMapper
 ) : TextWebSocketHandler() {
 
@@ -47,7 +47,7 @@ class AiServerWebSocketHandler(
                     logger.info { "AI 서버 상태 메시지 수신: ${response.status}" }
 
                     if (response.status == "streaming") {
-                        aiServerChannel.trySend(TTSResult.StartStreaming())
+                        aiServerChannel.trySend(TTSOutput.StartStreaming())
                     }
                 }
             }
@@ -68,7 +68,7 @@ class AiServerWebSocketHandler(
         val bytes = ByteArray(buffer.remaining())
         buffer.get(bytes)
 
-        aiServerChannel.trySend(TTSResult.Voice(bytes))
+        aiServerChannel.trySend(TTSOutput.Voice(bytes))
     }
 
     override fun afterConnectionClosed(session: WebSocketSession, status: CloseStatus) {
