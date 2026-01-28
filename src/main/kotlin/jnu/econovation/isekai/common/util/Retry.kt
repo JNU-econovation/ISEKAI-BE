@@ -1,4 +1,4 @@
-package jnu.econovation.isekai.common.extension
+package jnu.econovation.isekai.common.util
 
 import kotlinx.coroutines.delay
 import mu.KotlinLogging
