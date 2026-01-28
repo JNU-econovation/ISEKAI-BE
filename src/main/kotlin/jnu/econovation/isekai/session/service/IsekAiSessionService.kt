@@ -9,7 +9,7 @@ import jnu.econovation.isekai.character.service.CharacterCoordinateService
 import jnu.econovation.isekai.chat.dto.internal.ChatDTO
 import jnu.econovation.isekai.chat.service.ChatMemoryService
 import jnu.econovation.isekai.common.exception.server.InternalServerException
-import jnu.econovation.isekai.common.extension.retry
+import jnu.econovation.isekai.common.util.retry
 import jnu.econovation.isekai.gemini.client.GeminiLiveClient
 import jnu.econovation.isekai.gemini.client.GeminiRestClient
 import jnu.econovation.isekai.gemini.constant.enums.GeminiEmotion
@@ -336,11 +336,19 @@ class IsekAiSessionService(
 
                     context.onReply(SessionTextResponse.fromEmotion(finalResponse.emotion))
 
-                    val chunks: List<String> = finalResponse
-                        .krTextResponse
-                        .split(SENTENCE_REGEX)
+                    val rawChunks = finalResponse.krTextResponse.split(SENTENCE_REGEX)
                         .map { it.trim() }
                         .filter { it.isNotEmpty() }
+
+                    val chunks = rawChunks.fold(mutableListOf<String>()) { acc, sentence ->
+                        if (acc.isNotEmpty() && acc.last().length <= 10) {
+                            val lastIdx = acc.size - 1
+                            acc[lastIdx] = "${acc[lastIdx]} $sentence"
+                        } else {
+                            acc.add(sentence)
+                        }
+                        acc
+                    }
 
                     chunks.forEach { chunk -> context.channels.ttsInput.send(chunk) }
 

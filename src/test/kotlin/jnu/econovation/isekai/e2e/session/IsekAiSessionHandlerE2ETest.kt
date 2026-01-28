@@ -81,7 +81,7 @@ class IsekAiSessionHandlerE2ETest(
 
     @BeforeEach
     fun setUp() {
-        val member = memberRepository.findByEmail(MASTER_EMAIL)
+        val member = memberRepository.findByEmailHash(MASTER_EMAIL.toHash())
             ?: throw IllegalStateException("테스트 유저가 DB에 존재하지 않습니다: $MASTER_EMAIL")
         val accessToken = jwtUtil.generateToken(MemberInfoDTO.from(member))
 

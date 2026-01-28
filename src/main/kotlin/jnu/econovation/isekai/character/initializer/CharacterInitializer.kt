@@ -13,7 +13,6 @@ import mu.KotlinLogging
 import org.springframework.context.annotation.Profile
 import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Component
-import org.springframework.transaction.annotation.Transactional
 
 @Component
 @Profile("dev")
@@ -23,11 +22,10 @@ class CharacterInitializer(
 ) {
     private val logger = KotlinLogging.logger {}
 
-    @Transactional
     @EventListener(MemberInitializedEvent::class)
     fun init() {
         if (repository.count() == 0L) {
-            val masterMember = memberRepository.findByEmail(MASTER_EMAIL)
+            val masterMember = memberRepository.findByEmailHash(MASTER_EMAIL.toHash())
                 ?: throw InternalServerException(cause = IllegalStateException("master member not found"))
 
             val character = Character.builder()
@@ -49,5 +47,4 @@ class CharacterInitializer(
             logger.info { "character가 이미 DB에 존재함" }
         }
     }
-
 }
