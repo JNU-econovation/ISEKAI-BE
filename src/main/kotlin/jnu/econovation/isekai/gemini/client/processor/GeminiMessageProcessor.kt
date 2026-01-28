@@ -15,13 +15,16 @@ class GeminiMessageProcessor(
     fun process(sessionId: String, message: LiveServerMessage): List<GeminiLiveOutput> {
         val outputs = mutableListOf<GeminiLiveOutput>()
 
-//        logger.info { "gemini received -> $message" }
+        logThought(message)
+
+//        logger.info { "gemini live received -> $message" }
 
         processInputSTT(message)?.let { outputs.add(it) }
         outputs.addAll(processFunctionCall(sessionId, message))
 
         return outputs
     }
+
 
     private fun processInputSTT(message: LiveServerMessage): GeminiLiveOutput.InputSTT? {
         var result: GeminiLiveOutput.InputSTT? = null
@@ -69,4 +72,21 @@ class GeminiMessageProcessor(
         }
         return functionCalls
     }
+
+
+    private fun logThought(message: LiveServerMessage) {
+        message.serverContent().getOrNull()
+            ?.modelTurn()?.getOrNull()
+            ?.parts()?.getOrNull()
+            ?.forEach { part ->
+                part.text().getOrNull()?.let { text ->
+                    logger.info { ">>> gemini live Text: $text" }
+
+                    if (part.thought().orElse(false)) {
+                        logger.info { "이는 생각 과정입니다." }
+                    }
+                }
+            }
+    }
+
 }

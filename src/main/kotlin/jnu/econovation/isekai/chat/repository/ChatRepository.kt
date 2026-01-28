@@ -13,5 +13,9 @@ interface ChatRepository : JpaRepository<Chat, Long> {
     fun findRecentChatsByHostMember(characterId: Long?, hostMemberId: Long, limit: Int): List<Chat>
 
     @Query("SELECT c FROM Chat c WHERE c.character.id = :characterId AND c.hostMember.id = :hostMemberId ORDER BY c.createdAt DESC")
-    fun findRecentChatsByHostMember( characterId: Long?,hostMemberId: Long, pageable: Pageable): Page<Chat>
+    fun findRecentChatsByHostMember(
+        characterId: Long?,
+        hostMemberId: Long,
+        pageable: Pageable
+    ): Page<Chat>
 }
