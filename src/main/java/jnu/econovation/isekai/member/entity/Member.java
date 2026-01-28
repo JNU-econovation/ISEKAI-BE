@@ -9,7 +9,10 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jnu.econovation.isekai.common.entity.BaseEntity;
+import jnu.econovation.isekai.common.extension.HashUtils;
 import jnu.econovation.isekai.member.vo.Email;
 import jnu.econovation.isekai.member.vo.Nickname;
 import jnu.econovation.isekai.member.vo.Oauth2Provider;
@@ -31,6 +34,9 @@ public class Member extends BaseEntity {
     @AttributeOverride(name = "value", column = @Column(name = "email", nullable = false, unique = true))
     private Email email;
 
+    @Column(unique = true)
+    private String emailHash;
+
     @Embedded
     @AttributeOverride(name = "value", column = @Column(name = "nickname", nullable = false, unique = true))
     private Nickname nickname;
@@ -49,5 +55,11 @@ public class Member extends BaseEntity {
         this.email = email;
         this.nickname = nickname;
         this.role = Role.USER;
+    }
+
+    @PrePersist
+    @PreUpdate
+    private void updateEmailHash() {
+        this.emailHash = HashUtils.toHash(this.email.getValue());
     }
 }

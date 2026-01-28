@@ -1,7 +1,7 @@
 package jnu.econovation.isekai.aiServer.service
 
 import jnu.econovation.isekai.aiServer.client.TTSClient
-import jnu.econovation.isekai.aiServer.dto.internal.TTSResult
+import jnu.econovation.isekai.aiServer.dto.internal.TTSOutput
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
@@ -15,11 +15,11 @@ class AiServerTTSService(
 
     suspend fun tts(
         voiceId: Long,
-        requestStream: Flow<String>,
+        input: Flow<String>,
         aiServerReadySignal: CompletableDeferred<Unit>
-    ): Flow<TTSResult> {
+    ): Flow<TTSOutput> {
         return flow {
-            emitAll(client.tts(voiceId, requestStream, aiServerReadySignal))
+            emitAll(client.tts(voiceId, input, aiServerReadySignal))
         }
     }
 }

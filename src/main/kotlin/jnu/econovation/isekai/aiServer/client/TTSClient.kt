@@ -3,7 +3,7 @@ package jnu.econovation.isekai.aiServer.client
 import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.websocket.ContainerProvider
 import jnu.econovation.isekai.aiServer.config.AiServerConfig
-import jnu.econovation.isekai.aiServer.dto.internal.TTSResult
+import jnu.econovation.isekai.aiServer.dto.internal.TTSOutput
 import jnu.econovation.isekai.aiServer.dto.request.TTSRequest
 import jnu.econovation.isekai.aiServer.factory.AiServerWebSocketHandlerFactory
 import kotlinx.coroutines.CompletableDeferred
@@ -45,9 +45,9 @@ class TTSClient(
 
     suspend fun tts(
         voiceId: Long,
-        requestStream: Flow<String>,
+        input: Flow<String>,
         aiServerReadySignal: CompletableDeferred<Unit>
-    ): Flow<TTSResult> = channelFlow {
+    ): Flow<TTSOutput> = channelFlow {
         val handler = handlerFactory.createHandler(channel = this)
 
         logger.info { "TTS 서버 웹소켓 연결 중" }
@@ -65,7 +65,7 @@ class TTSClient(
 
         launch {
             runCatching {
-                requestStream
+                input
                     .map { TTSRequest(prompt = it) }
                     .collect { request ->
                     session.sendMessage(TextMessage(mapper.writeValueAsString(request)))
