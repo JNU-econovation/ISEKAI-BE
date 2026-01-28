@@ -1,16 +1,15 @@
 package jnu.econovation.isekai.common.extension
 
-import com.google.genai.errors.ServerException
-import jnu.econovation.isekai.common.exception.server.InternalServerException
 import kotlinx.coroutines.delay
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 
-suspend fun <T> geminiRetry(
+suspend fun <T> retry(
     times: Int = 3,
     initialDelay: Long = 1000,
     factor: Double = 2.0,
+    retryCondition: (Exception) -> Boolean = { true },
     block: suspend () -> T
 ): T {
     var currentDelay = initialDelay
@@ -18,8 +17,8 @@ suspend fun <T> geminiRetry(
         try {
             return block()
         } catch (e: Exception) {
-            if (e is InternalServerException || e is ServerException) {
-                logger.warn { "Retrying... error: ${e.message}" }
+            if (retryCondition(e)) {
+                logger.warn { "Retrying... (${it + 1}/${times - 1}) error: ${e.message}" }
                 delay(currentDelay)
                 currentDelay = (currentDelay * factor).toLong()
             } else {
