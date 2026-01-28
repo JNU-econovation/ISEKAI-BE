@@ -6,6 +6,7 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 import jnu.econovation.isekai.common.converter.StringEncryptConverter;
 import jnu.econovation.isekai.common.exception.client.BadDataSyntaxException;
+import jnu.econovation.isekai.common.extension.HashUtils;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -30,6 +31,11 @@ public class Email {
         if (value == null || !EMAIL_PATTERN.matcher(value).matches()) {
             throw new BadDataSyntaxException("올바른 이메일 형식이 아닙니다.");
         }
+    }
+
+    public String toHash() {
+        if (this.value == null) return null;
+        return HashUtils.toHash(this.value);
     }
 
     @Override

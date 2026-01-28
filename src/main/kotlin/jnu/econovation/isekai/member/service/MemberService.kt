@@ -7,7 +7,6 @@ import jnu.econovation.isekai.member.dto.response.AboutMeResponse
 import jnu.econovation.isekai.member.entity.Member
 import jnu.econovation.isekai.member.repository.MemberRepository
 import jnu.econovation.isekai.member.util.RandomNicknameGenerator
-import jnu.econovation.isekai.member.vo.Email
 import jnu.econovation.isekai.member.vo.Nickname
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -22,7 +21,7 @@ class MemberService(
 
     @Transactional
     fun getOrSave(oAuth2MemberInfoDTO: OAuth2MemberInfoDTO): MemberInfoDTO {
-        val member = getEntityByEmail(oAuth2MemberInfoDTO.email)
+        val member = getEntityByEmailHash(oAuth2MemberInfoDTO.email.toHash())
             ?: run {
                 repository.save(
                     Member.builder()
@@ -36,7 +35,7 @@ class MemberService(
         return MemberInfoDTO.from(member)
     }
 
-    fun getAboutMe(memberInfoDTO: MemberInfoDTO) : AboutMeResponse {
+    fun getAboutMe(memberInfoDTO: MemberInfoDTO): AboutMeResponse {
         return AboutMeResponse.from(memberInfoDTO)
     }
 
@@ -51,16 +50,14 @@ class MemberService(
     fun getEntity(id: Long): Member? = repository.findById(id).orElse(null)
 
     @Transactional(readOnly = true)
-    fun findByEmail(email: Email): MemberInfoDTO? {
-        return findByEmailEntity(email)?.let { MemberInfoDTO.from(it) }
+    fun getByEmailHash(emailHash: String): MemberInfoDTO? {
+        return getEntityByEmailHash(emailHash)?.let { MemberInfoDTO.from(it) }
     }
 
     @Transactional(readOnly = true)
-    fun findByEmailEntity(email: Email): Member? {
-        return repository.findByEmail(email)
+    fun getEntityByEmailHash(emailHash: String): Member? {
+        return repository.findByEmailHash(emailHash)
     }
-
-    private fun getEntityByEmail(email: Email): Member? = repository.findByEmail(email)
 
     private fun createUniqueNickname(): Nickname {
         repeat(10) {

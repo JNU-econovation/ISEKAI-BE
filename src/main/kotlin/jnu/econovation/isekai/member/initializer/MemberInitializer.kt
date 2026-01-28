@@ -15,7 +15,6 @@ import org.springframework.context.annotation.Profile
 import org.springframework.context.event.EventListener
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
-import org.springframework.transaction.annotation.Transactional
 
 @Order(1)
 @Component
@@ -27,10 +26,9 @@ class MemberInitializer(
 ) {
     private val logger = KotlinLogging.logger {}
 
-    @Transactional
     @EventListener(ApplicationReadyEvent::class)
     fun init() {
-        service.findByEmail(MASTER_EMAIL)
+        service.getByEmailHash(MASTER_EMAIL.toHash())
             ?.let { logger.info { "Master Member가 이미 DB에 존재함" } }
             ?: run {
                 val masterMember = Member.builder()
@@ -38,6 +36,7 @@ class MemberInitializer(
                     .nickname(Nickname("테스트닉네임"))
                     .provider(MASTER_PROVIDER)
                     .build()
+
                 service.save(masterMember)
                 logger.info { "Master Member 저장 완료 -> $masterMember" }
 
