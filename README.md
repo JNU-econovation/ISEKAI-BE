@@ -77,18 +77,18 @@ config:
 ---
 flowchart LR
     subgraph Internet["☁️ Internet Layer"]
-        CF["CloudFlare DNS<br>*.isek-ai.org"]
+        CF["CloudFlare DNS<br>*.your-domain.com"]
     end
-    subgraph VM["🖥️ Virtual Machine<br>nginx.isek-ai.org"]
+    subgraph VM["🖥️ Virtual Machine<br>nginx.your-domain.com"]
         Nginx["Nginx Proxy<br>:443 HTTPS"]
     end
     subgraph Docker["🐳 Docker Containers"]
-        Backend["Spring Boot App<br>backend.isek-ai.org"]
-        Storage["SeaweedFS<br>s3api.isek-ai.org"]
+        Backend["Spring Boot App<br>backend.your-domain.com"]
+        Storage["SeaweedFS<br>s3api.your-domain.com"]
         DB[("PostgreSQL<br>pgvector")]
         Cache[("Redis<br>Cache")]
     end
-    subgraph NAS["📦 Synology NAS<br>synology.isek-ai.org"]
+    subgraph NAS["📦 Synology NAS<br>synology.your-domain.com"]
         direction TB
         VM
         Docker
