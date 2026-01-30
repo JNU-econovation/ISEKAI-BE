@@ -1,4 +1,4 @@
-# (ISEKAI-BE) - 몰입형 AI 캐릭터 채팅 서비스 백엔드
+# ISEKAI-BE: 몰입형 AI 캐릭터 채팅 서비스 백엔드
 
 ![Project Banner](https://img.shields.io/badge/Project-ISEKAI-purple?style=for-the-badge) 
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.4-brightgreen?style=for-the-badge) 
