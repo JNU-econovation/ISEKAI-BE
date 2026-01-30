@@ -5,6 +5,7 @@
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.2.0-purple?style=for-the-badge) 
 ![Gemini](https://img.shields.io/badge/Gemini-Live%20Multimodal-orange?style=for-the-badge)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-blue?style=for-the-badge)
+![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
 ## 📖 프로젝트 소개 (Introduction)
 
