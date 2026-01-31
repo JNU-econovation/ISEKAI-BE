@@ -152,36 +152,91 @@ sequenceDiagram
     participant 핸들러
     participant 세션서비스
     participant Live as Gemini Live<br/>(라우터)
-    participant Rest as Gemini REST<br/>(생성기)
     participant 메모리 as 메모리<br/>(RAG)
+    participant Rest as Gemini REST<br/>(생성기)
     participant TTS as AI 서버<br/>(TTS)
+
+    rect rgb(250, 250, 240)
+        Note over 세션서비스,TTS: 초기화: AI 서버 연결 및 준비
+        
+        세션서비스->>Live: 🔌 WebSocket 연결
+        Live-->>세션서비스: ✅ Gemini Live 연결 완료
+        
+        세션서비스->>TTS: 🔌 WebSocket 연결
+        TTS-->>세션서비스: ✅ TTS 서버 연결 완료
+        
+        세션서비스->>메모리: 📚 초기 컨텍스트 조회
+        Note over 메모리: 단기 기억 (최근 대화)<br/>중기 기억 (요약)
+        메모리-->>세션서비스: 초기 컨텍스트
+        
+        세션서비스->>Live: 📝 초기 컨텍스트 전송 (WS)
+        Note over Live: 대화 이력 로드 완료
+        
+        세션서비스->>핸들러: 🟢 SERVER_READY
+        핸들러->>사용자: "준비 완료" 메시지
+    end
 
     사용자->>핸들러: 🎤 음성 스트림 (Binary WS)
     핸들러->>세션서비스: 오디오 페이로드 전달
     세션서비스->>Live: 오디오 청크 전송 (WS)
     
+    Live-->>세션서비스: 💬 USER_SUBTITLE_CHUNK (실시간 STT)
+    세션서비스->>핸들러: STT 자막 청크
+    핸들러->>사용자: 💬 실시간 자막 표시 (WS)
+    
     rect rgb(240, 248, 255)
-        Note over Live: 의도 분류<br/>(리스닝 모드)
-        Live-->>세션서비스: 도구 호출: REQUEST_REPLY
+        Note over Live: 음성 활동 감지 및 의도 분류<br/>(리스닝 모드)
+        Live-->>세션서비스: 🔔 도구 호출: REQUEST_REPLY
     end
 
-    세션서비스->>메모리: 🔍 컨텍스트 조회
-    Note over 메모리: 단기 (최근 대화)<br/>중기 (요약)<br/>장기 (벡터 검색)
-    메모리-->>세션서비스: 컨텍스트 데이터
+    세션서비스->>핸들러: 🤔 BOT_IS_THINKING
+    핸들러->>사용자: "생각 중" 상태 표시
+    
+    세션서비스->>핸들러: 💬 USER_SUBTITLE_COMPLETE
+    핸들러->>사용자: 최종 사용자 입력 자막
+
+    세션서비스->>메모리: 🔍 대화 컨텍스트 조회
+    Note over 메모리: 단기 기억<br/>중기 기억
+    메모리-->>세션서비스: 최신 컨텍스트
 
     세션서비스->>Rest: 🧠 응답 생성 요청 (HTTP)
-    Note over Rest: 컨텍스트 + 페르소나 활용<br/>(추론 모드)
-    Rest-->>세션서비스: 텍스트 응답
-
-    par 이중 출력 생성
-        세션서비스->>TTS: 🗣️ TTS 요청 (WS)
-        TTS-->>세션서비스: 🔊 오디오 스트림
-        세션서비스->>핸들러: 오디오 + 텍스트 자막
-        핸들러->>사용자: 🔊 음성 + 💬 텍스트 (WS)
+    Note over Rest: 1차 추론<br/>(추론 모드)
+    
+    alt RAG 검색 필요 시
+        Rest-->>세션서비스: 🔔 도구 호출: SEARCH_LONG_TERM_MEMORY_RAG
+        세션서비스->>메모리: 🔎 장기 기억 벡터 검색
+        Note over 메모리: 유사도 기반 RAG
+        메모리-->>세션서비스: 장기 기억 데이터
+        세션서비스->>Rest: 도구 응답 전달 (HTTP)
+        Note over Rest: 2차 추론<br/>(RAG 결과 반영)
     end
     
-    세션서비스->>메모리: 비동기 저장 및 통합
-    Note over 메모리: 횟수 임계값 도달 시 트리거
+    Rest-->>세션서비스: 🔔 도구 호출: FINAL_ANSWER
+    Note over 세션서비스: 최종 답변 + 감정 추출
+    
+    세션서비스->>핸들러: 😊 EMOTION
+    핸들러->>사용자: 캐릭터 감정 표시
+
+    par 이중 출력 생성
+        세션서비스->>TTS: 🗣️ TTS 요청 (문장 단위, WS)
+        TTS-->>세션서비스: 🔊 오디오 스트림
+        
+        세션서비스->>핸들러: 🔊 음성 스트림 (Binary)
+        핸들러->>사용자: 🔊 음성 재생
+        
+        세션서비스->>핸들러: ✅ TURN_COMPLETE (user + bot 텍스트)
+        핸들러->>사용자: 💬 최종 AI 답변 자막 표시
+    end
+    
+    opt 사용자가 응답 중 끼어들 경우
+        사용자->>핸들러: 🎤 새로운 음성 입력
+        세션서비스->>핸들러: ⚠️ INTERRUPTED
+        핸들러->>사용자: 이전 응답 취소
+        Note over 세션서비스: 진행 중인 답변 생성 취소
+    end
+    
+    세션서비스->>메모리: 💾 비동기 저장 및 통합
+    Note over 메모리: 대화 내역 저장<br/>횟수 임계값 도달 시<br/>요약 및 임베딩 트리거
 ```
 
 ### 💾 데이터베이스 설계 (ER Diagram)
