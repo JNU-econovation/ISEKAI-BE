@@ -1,74 +1,76 @@
-# ISEKAI-BE: 몰입형 AI 캐릭터 채팅 서비스 백엔드
+# ISEKAI-BE
 
-![Project Banner](https://img.shields.io/badge/Project-ISEKAI-purple?style=for-the-badge) 
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.4-brightgreen?style=for-the-badge) 
-![Kotlin](https://img.shields.io/badge/Kotlin-2.2.0-purple?style=for-the-badge) 
-![Gemini](https://img.shields.io/badge/Gemini-Live%20Multimodal-orange?style=for-the-badge)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-blue?style=for-the-badge)
+몰입형 AI 캐릭터 채팅 서비스의 백엔드 서버입니다.
+
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.4-brightgreen?style=for-the-badge)
+![Kotlin](https://img.shields.io/badge/Kotlin-2.2.0-purple?style=for-the-badge)
+![Java](https://img.shields.io/badge/Java-21-red?style=for-the-badge)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-blue?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
-## 📖 프로젝트 소개 (Introduction)
+## 프로젝트 개요
 
-**ISEK-AI**는 사용자가 자신만의 AI 캐릭터를 생성하고, **실시간 음성 대화** 또는 **텍스트 채팅**을 통해 깊은 교감을 나눌 수 있는 **몰입형 AI 캐릭터 채팅 서비스**입니다.
+ISEKAI-BE는 사용자가 생성한 AI 캐릭터와 텍스트 또는 실시간 음성으로 대화할 수 있게 하는 Spring Boot 기반 백엔드입니다.
 
-단순한 텍스트 챗봇을 넘어, **Google Gemini Live**의 **Native Audio** 기능을 활용하여 실제 사람과 통화하듯 끊김 없는 대화 경험을 제공하며, 텍스트 기반 채팅도 자연스럽게 지원합니다. 또한, **단기/중기/장기 기억**으로 세분화된 독자적인 메모리 시스템을 통해, 캐릭터가 사용자와의 추억을 영구히 기억하고 대화 문맥에 맞게 활용할 수 있도록 구현했습니다.
+주요 흐름은 다음과 같습니다.
 
-### 💡 핵심 가치
--   **Persistent Memory**: 대화가 길어져도 잊지 않는 **기억 통합(Consolidation)** 및 **의미 기반 검색(RAG)** 시스템.
--   **Living Persona**: 사용자가 설정한 페르소나에 완벽하게 몰입하는 **LLM Cascade 아키텍처** (Live for Intent, REST for Reasoning).
+- 캐릭터 생성 요청을 외부 AI 서버와 Gemini 이미지 생성으로 처리합니다.
+- 캐릭터 리소스는 S3 호환 스토리지에 preview/persisted 단계로 저장합니다.
+- 음성 WebSocket 세션에서 Gemini Live가 사용자 발화를 감지하고 STT 청크를 반환합니다.
+- 응답이 필요하면 Gemini REST가 페르소나, 단기 기억, 중기 기억, 장기 기억 RAG를 바탕으로 답변을 생성합니다.
+- TTS 서버가 답변 문장을 음성 스트림으로 변환합니다.
+- 대화 기록은 PostgreSQL에 저장하고, 일정 횟수마다 요약과 임베딩을 생성해 장기 기억으로 보관합니다.
 
----
+## 기술 스택
 
-## ✨ 주요 기능 (Key Features)
+| 영역 | 기술 |
+| --- | --- |
+| Language | Kotlin 2.2.0, Java 21 |
+| Framework | Spring Boot 3.5.4, Spring MVC, Spring WebSocket |
+| Security | Spring Security, OAuth2 Client, JWT |
+| Async | Kotlin Coroutines, Reactor |
+| Database | PostgreSQL, pgvector, Spring Data JPA, Hibernate Vector |
+| Cache | Redis |
+| AI | Google GenAI SDK, Gemini Live, Gemini REST |
+| Storage | S3-compatible API, Spring Cloud AWS S3 |
+| Build | Gradle |
 
-### 1. LLM Cascade 아키텍처 (LLM Cascade Architecture)
-경량 모델이 의도를 분류하고, 고성능 모델이 실제 응답을 생성하는 **2단계 캐스케이드 구조**를 구현했습니다.
--   **1단계 - Router (Gemini Live)**: 사용자의 음성을 실시간으로 분석하여 **발화 의도(Intent)**를 파악하고, 대화가 필요한 경우에만 다음 단계를 트리거합니다. (Listening Mode)
--   **2단계 - Generator (Gemini REST)**: 대화 맥락, 기억 데이터, 페르소나를 종합하여, 실제 캐릭터의 답변을 생성합니다. (Reasoning Mode)
--   **효율성**: 모든 입력을 고성능 모델로 처리하지 않고, 필요한 경우에만 추론을 수행하여 비용과 지연시간을 최소화합니다.
+## 주요 기능
 
-### 2. 3단계 기억 시스템 (Tri-Layer Memory System)
-인간의 기억 메커니즘을 모방하여, 대화의 연속성을 보장합니다.
--   **Short-term**: 현재 세션 내의 **Raw Transcript**를 저장.
--   **Mid-term**: 대화가 일정 횟수(`CONSOLIDATION_COUNT`) 이상 쌓이면, **요약(Summarize)**하여 핵심 내용만 추출.
--   **Long-term**: 요약된 기억을 **임베딩(Embedding)**하여 `pgvector`에 저장하고, 유사한 상황 발생 시 **의미 검색(Semantic Search)**으로 소환.
+### 캐릭터 생성
 
-### 3. 실시간 세션 최적화 (Session Optimization)
--   **Session Optimizer**: 웹소켓 세션의 유휴 상태를 모니터링하고, 30분 이상 비활성 시 리소스를 자동 회수하여 서버 안정성을 확보했습니다.
--   **Backpressure Handling**: `Channel`과 `CompletableDeferred`를 활용하여 음성 스트림의 폭주 트래픽을 제어하고 순서를 보장합니다.
+- `POST /characters/live2d`로 Live2D 생성 작업을 외부 AI 서버에 요청합니다.
+- `POST /characters/background-image`로 Gemini 이미지 모델을 사용해 배경 이미지를 생성합니다.
+- `POST /characters/confirm`에서 preview 파일을 persisted 위치로 복사하고 캐릭터를 생성합니다.
+- 배경 이미지와 누끼 이미지를 합성해 1024x1024 썸네일을 생성합니다.
+- 확정 중 오류가 발생하면 이미 복사된 persisted 파일을 비동기로 삭제합니다.
 
-### 4. 하이브리드 비동기 처리 전략 (Hybrid Async Strategy)
--   **코틀린 코루틴 (Kotlin Coroutines)**: 실시간 음성/텍스트 채팅 세션 처리에 코루틴을 적극 활용하여 경량 스레드 기반의 고성능 비동기 처리를 구현했습니다.
--   **가상 스레드 (Virtual Threads)**: RESTful API 엔드포인트와 동기 작업은 Java 21의 가상 스레드를 사용하여 높은 동시성과 효율적인 리소스 활용을 달성했습니다.
--   **적재적소 활용**: 스트리밍 처리는 코루틴의 `Flow`로, 블로킹 I/O는 가상 스레드로 처리하는 하이브리드 접근 방식을 채택했습니다.
+### 실시간 대화 세션
 
-### 5. 캐릭터 생성 및 관리 (Character Generation & Management)
--   **AI 기반 Live2D 생성**: 사용자의 텍스트 프롬프트를 기반으로 캐릭터 외형(누끼 이미지)과 배경 이미지를 자동 생성하고, 이를 합성하여 썸네일을 만듭니다.
--   **안전장치 (Safety Guardrails)**: 부적절한 생성 요청을 사전 필터링하며, 이미지 생성 실패 시 대체 모델을 자동으로 시도하는 재시도 메커니즘을 갖추고 있습니다.
--   **트랜잭션 보장**: 캐릭터 확정 중 오류 발생 시, 업로드된 모든 파일을 비동기로 자동 삭제하여 스토리지 누수를 방지합니다.
+- WebSocket 엔드포인트는 `/characters/{characterId}/voice?ticket={ticket}`입니다.
+- WebSocket 접속 전 `POST /websocket/ticket`으로 Redis 기반 one-time ticket을 발급받습니다.
+- ticket TTL은 60초이며, 검증 시 즉시 삭제됩니다.
+- Binary WebSocket 메시지는 16 kHz PCM 오디오 청크로 Gemini Live에 전달됩니다.
+- Text WebSocket 메시지는 `SessionTextRequest`로 파싱되어 텍스트 입력으로 처리됩니다.
 
-### 6. 온프레미스 컨테이너 인프라 (On-Premise Container Infrastructure)
--   **Zero 클라우드 비용**: Synology NAS Container Manager 기반으로 전체 백엔드 인프라를 구축하여, DNS 외 클라우드 비용 **0원**을 달성했습니다.
----
+### 기억 시스템
 
-## 🏗 시스템 구성 (System Architecture)
+- 한 턴은 사용자 메시지와 캐릭터 응답을 각각 `USER`, `BOT` 채팅 행으로 저장합니다.
+- 최근 대화는 단기 기억으로 조회합니다.
+- Redis 카운터가 `CONSOLIDATION_COUNT`에 도달하면 최근 대화를 요약해 중장기 기억으로 저장합니다.
+- 요약된 기억은 768차원 임베딩으로 저장하고, pgvector 거리 연산으로 유사 기억을 검색합니다.
 
-### 🛠 기술 스택 (Tech Stack)
-| Layer | Technology |
-| :--- | :--- |
-| **Language** | ![Kotlin](https://img.shields.io/badge/Kotlin-2.2.0-purple) ![Java](https://img.shields.io/badge/Java-21-red) |
-| **Framework** | **Spring Boot 3.5.4** (Spring MVC), WebFlux (WebClient only), Spring Security, OAuth2 |
-| **WebSocket** | **Spring WebSocket** (Jakarta WebSocket API) |
-| **AI Protocol** | Google Gemini 2.5 Flash Live (WebSocket), Gemini 3.0 Flash Preview (REST) |
-| **Database** | **PostgreSQL 17** (pgvector 0.1.6), **Redis** (Session & Cache) |
-| **ORM** | **Spring Data JPA**, Hibernate 6.6 (Vector Support) |
-| **Storage** | **SeaweedFS** (S3-compatible API via Spring Cloud AWS 3.4.2) |
-| **Async** | **Kotlin Coroutines 1.10.2**, Reactor |
-| **Infrastructure** | Gradle, Docker, Nginx |
+### 인증과 보안
 
-### 🔍 아키텍처 다이어그램 (Architectural Diagrams)
+- Kakao OAuth2 로그인을 사용합니다.
+- JWT 필터로 HTTP 요청 인증을 처리합니다.
+- WebSocket은 HTTP 인증 토큰을 직접 유지하지 않고 Redis ticket으로 handshaking합니다.
+- CORS 허용 origin, OAuth redirect, JWT/AES 키는 `application-security.yml`과 환경 변수로 관리합니다.
 
-#### 1. 백엔드 시스템 아키텍처 (Backend System Architecture)
+## 🔍 아키텍처 다이어그램
+
+### 1. 백엔드 시스템 아키텍처 (Backend System Architecture)
+
 ```mermaid
 ---
 config:
@@ -95,6 +97,7 @@ flowchart LR
         Docker
     end
     subgraph Home["🏠 Home Network"]
+        direction TB
         Router["Home Router"]
         NAS
     end
@@ -120,7 +123,8 @@ flowchart LR
     style Home fill:#FFF3E0
 ```
 
-#### 2. 프로젝트 아키텍처 (Service Architecture)
+### 2. 프로젝트 아키텍처 (Service Architecture)
+
 ```mermaid
 graph LR
     FE[프론트 엔드]
@@ -129,13 +133,13 @@ graph LR
     GeminiRest[Gemini 3.0 Flash<br/>Preview]
     AI1[AI 서버 1<br/>캐릭터 모델]
     AI2[AI 서버 2<br/>TTS]
-    
+
     FE <-->|WS/HTTP| BE
     BE <-->|WS| GeminiLive
     BE <-->|HTTP| GeminiRest
     BE -->|HTTP| AI1
     BE <-->|WS| AI2
-    
+
     style FE fill:#FFB6C1
     style BE fill:#90EE90
     style GeminiLive fill:#87CEEB
@@ -144,268 +148,272 @@ graph LR
     style AI2 fill:#B0C4DE
 ```
 
-### 🔄 데이터 흐름 (Data Flow)
+## 🔄 데이터 흐름 (Data Flow)
+
+실시간 음성 대화 한 턴의 주요 흐름입니다.
+
 ```mermaid
 sequenceDiagram
     autonumber
-    actor 사용자
-    participant 핸들러
-    participant 세션서비스
-    participant Live as Gemini Live<br/>(라우터)
-    participant 메모리 as 메모리<br/>(RAG)
-    participant Rest as Gemini REST<br/>(생성기)
-    participant TTS as AI 서버<br/>(TTS)
+    actor User as 사용자
+    participant Ticket as Ticket API
+    participant Handler as IsekAiSessionHandler
+    participant Session as IsekAiSessionService
+    participant Live as Gemini Live
+    participant Memory as ChatMemoryService
+    participant Rest as Gemini REST
+    participant TTS as TTS Server
 
-    rect rgb(250, 250, 240)
-        Note over 세션서비스,TTS: 초기화: AI 서버 연결 및 준비
-        
-        세션서비스->>Live: 🔌 WebSocket 연결
-        Live-->>세션서비스: ✅ Gemini Live 연결 완료
-        
-        세션서비스->>TTS: 🔌 WebSocket 연결
-        TTS-->>세션서비스: ✅ TTS 서버 연결 완료
-        
-        세션서비스->>메모리: 📚 초기 컨텍스트 조회
-        Note over 메모리: 단기 기억 (최근 대화)<br/>중기 기억 (요약)
-        메모리-->>세션서비스: 초기 컨텍스트
-        
-        세션서비스->>Live: 📝 초기 컨텍스트 전송 (WS)
-        Note over Live: 대화 이력 로드 완료
-        
-        세션서비스->>핸들러: 🟢 SERVER_READY
-        핸들러->>사용자: "준비 완료" 메시지
+    User->>Ticket: POST /websocket/ticket
+    Ticket-->>User: 60초 one-time ticket
+    User->>Handler: WS /characters/{id}/voice?ticket=...
+
+    par 세션 초기화
+        Session->>Live: Live WebSocket 연결
+        Session->>TTS: TTS WebSocket 연결
+        Session->>Memory: 초기 단기/중기 기억 조회
     end
 
-    사용자->>핸들러: 🎤 음성 스트림 (Binary WS)
-    핸들러->>세션서비스: 오디오 페이로드 전달
-    세션서비스->>Live: 오디오 청크 전송 (WS)
-    
-    Live-->>세션서비스: 💬 USER_SUBTITLE_CHUNK (실시간 STT)
-    세션서비스->>핸들러: STT 자막 청크
-    핸들러->>사용자: 💬 실시간 자막 표시 (WS)
-    
-    rect rgb(240, 248, 255)
-        Note over Live: 음성 활동 감지 및 의도 분류<br/>(리스닝 모드)
-        Live-->>세션서비스: 🔔 도구 호출: REQUEST_REPLY
+    Session-->>Handler: SERVER_READY
+    Handler-->>User: 준비 완료
+
+    User->>Handler: Binary audio chunk 또는 text message
+    Handler->>Session: SessionRequest 전달
+    Session->>Live: audio/text stream 전달
+
+    Live-->>Session: USER_SUBTITLE_CHUNK
+    Session-->>Handler: USER_SUBTITLE_CHUNK
+    Handler-->>User: 실시간 사용자 자막
+
+    Live-->>Session: REQUEST_REPLY function call
+    Session-->>Handler: BOT_IS_THINKING
+    Session-->>Handler: USER_SUBTITLE_COMPLETE
+
+    Session->>Memory: 단기/중기 기억 조회
+    Session->>Rest: 답변 생성 요청
+
+    alt 장기 기억 검색 필요
+        Rest-->>Session: SEARCH_LONG_TERM_MEMORY_RAG
+        Session->>Memory: pgvector 유사 기억 검색
+        Memory-->>Session: long-term memory
+        Session->>Rest: tool response 전달
     end
 
-    세션서비스->>핸들러: 🤔 BOT_IS_THINKING
-    핸들러->>사용자: "생각 중" 상태 표시
-    
-    세션서비스->>핸들러: 💬 USER_SUBTITLE_COMPLETE
-    핸들러->>사용자: 최종 사용자 입력 자막
+    Rest-->>Session: FINAL_ANSWER
+    Session-->>Handler: EMOTION
+    Session->>TTS: 문장 단위 TTS 요청
+    TTS-->>Session: audio chunks
 
-    세션서비스->>메모리: 🔍 대화 컨텍스트 조회
-    Note over 메모리: 단기 기억<br/>중기 기억
-    메모리-->>세션서비스: 최신 컨텍스트
+    Session-->>Handler: TURN_COMPLETE
+    Session-->>Handler: binary audio chunks
+    Handler-->>User: 텍스트 응답과 음성 스트림
 
-    세션서비스->>Rest: 🧠 응답 생성 요청 (HTTP)
-    Note over Rest: 1차 추론<br/>(추론 모드)
-    
-    alt RAG 검색 필요 시
-        Rest-->>세션서비스: 🔔 도구 호출: SEARCH_LONG_TERM_MEMORY_RAG
-        세션서비스->>메모리: 🔎 장기 기억 벡터 검색
-        Note over 메모리: 유사도 기반 RAG
-        메모리-->>세션서비스: 장기 기억 데이터
-        세션서비스->>Rest: 도구 응답 전달 (HTTP)
-        Note over Rest: 2차 추론<br/>(RAG 결과 반영)
+    Session->>Memory: user/bot 대화 저장
+    opt Redis counter >= CONSOLIDATION_COUNT
+        Memory->>Rest: 요약 및 임베딩 요청
+        Memory->>Memory: ConsolidatedMemory 저장
     end
-    
-    Rest-->>세션서비스: 🔔 도구 호출: FINAL_ANSWER
-    Note over 세션서비스: 최종 답변 + 감정 추출
-    
-    세션서비스->>핸들러: 😊 EMOTION
-    핸들러->>사용자: 캐릭터 감정 표시
-
-    par 이중 출력 생성
-        세션서비스->>TTS: 🗣️ TTS 요청 (문장 단위, WS)
-        TTS-->>세션서비스: 🔊 오디오 스트림
-        
-        세션서비스->>핸들러: 🔊 음성 스트림 (Binary)
-        핸들러->>사용자: 🔊 음성 재생
-        
-        세션서비스->>핸들러: ✅ TURN_COMPLETE (user + bot 텍스트)
-        핸들러->>사용자: 💬 최종 AI 답변 자막 표시
-    end
-    
-    opt 사용자가 응답 중 끼어들 경우
-        사용자->>핸들러: 🎤 새로운 음성 입력
-        세션서비스->>핸들러: ⚠️ INTERRUPTED
-        핸들러->>사용자: 이전 응답 취소
-        Note over 세션서비스: 진행 중인 답변 생성 취소
-    end
-    
-    세션서비스->>메모리: 💾 비동기 저장 및 통합
-    Note over 메모리: 대화 내역 저장<br/>횟수 임계값 도달 시<br/>요약 및 임베딩 트리거
 ```
 
-### 💾 데이터베이스 설계 (ER Diagram)
+## 💾 데이터베이스 설계 (ER Diagram)
+
 ```mermaid
 erDiagram
-    MEMBER ||--o{ CHARACTER : "creates (author)"
-    MEMBER ||--o{ CHAT : "hosts (hostMember)"
-    MEMBER ||--o{ CONSOLIDATED_MEMORY : "owns (hostMember)"
-    CHARACTER ||--o{ CHAT : "participates"
-    CHARACTER ||--o{ CONSOLIDATED_MEMORY : "remembers"
-    
+    MEMBER ||--o{ CHARACTER : creates
+    MEMBER ||--o{ CHAT : hosts
+    MEMBER ||--o{ CONSOLIDATED_MEMORY : owns
+    CHARACTER ||--o{ CHAT : participates
+    CHARACTER ||--o{ CONSOLIDATED_MEMORY : remembers
+
     MEMBER {
         bigint id PK
         varchar email UK
         varchar emailHash UK
         varchar nickname UK
-        enum provider "KAKAO"
-        enum role "USER"
+        enum provider
+        enum role
         timestamp created_at
         timestamp updated_at
     }
-    
+
     CHARACTER {
         bigint id PK
         bigint author_id FK
         varchar character_name
         text persona
-        varchar live2dModelUrl
-        varchar backgroundUrl
-        varchar live2dModelNukkiUrl
-        varchar thumbnailUrl
-        bigint voiceId
-        boolean isPublic
+        varchar live2d_model_url
+        varchar background_url
+        varchar live2d_model_nukki_url
+        varchar thumbnail_url
+        bigint voice_id
+        boolean is_public
         timestamp created_at
         timestamp updated_at
     }
-    
+
     CHAT {
         bigint id PK
         bigint host_member_id FK
         bigint character_id FK
         text content
-        enum speaker "USER | BOT"
+        enum speaker
         timestamp created_at
         timestamp updated_at
     }
-    
+
     CONSOLIDATED_MEMORY {
         bigint id PK
         bigint host_member_id FK
         bigint character_id FK
         text summary
-        vector embedding "float[768]"
+        vector embedding
         timestamp created_at
         timestamp updated_at
     }
 ```
 
-### 🧩 웹소켓 클래스 구조 (WebSocket Class Diagram)
+## 🧩 웹소켓 클래스 구조 (WebSocket Class Diagram)
+
 ```mermaid
 classDiagram
 direction TB
+    class WebSocketTicketController {
+        +getTicket(userDetails) TicketResponse
+    }
+
+    class WebSocketTicketService {
+        +getTicket(memberInfoDTO) TicketResponse
+        +validateTicket(ticket) Long?
+    }
+
+    class WebSocketHandshakeInterceptor {
+        +beforeHandshake(request, response, wsHandler, attributes) Boolean
+    }
+
+    class WebSocketConfig {
+        +registerWebSocketHandlers(registry)
+    }
+
     class IsekAiSessionHandler {
-        -IsekAiSessionService service
-        -ObjectMapper mapper
-        +afterConnectionEstablished()
-        +handleBinaryMessage()
-        +handleTextMessage()
+        +afterConnectionEstablished(session)
+        +handleBinaryMessage(session, message)
+        +handleTextMessage(session, message)
+        +afterConnectionClosed(session, status)
+        +handleTransportError(session, exception)
     }
-    
+
     class IsekAiSessionService {
-        -GeminiLiveClient liveClient
-        -GeminiRestClient restClient
-        -ChatMemoryService memoryService
-        -AiServerTTSService aiServerTTSService
-        +processInputStream()
-        -routeGeminiLiveOutput()
-        -routeRestFunctionCall()
-        -routeTTSOutput()
+        +processInputStream(sessionId, readySignals, inputStream, characterId, hostMemberId, onReply)
+        -routeGeminiLiveOutput(output, context)
+        -routeRestFunctionCall(output, characterDTO, hostMemberId, context, systemPrompt, userMessage)
+        -routeTTSOutput(output, context)
     }
-    
-    class ChatMemoryService {
-        -ChatDataService chatService
-        -GeminiRestClient geminiRestClient
-        -ConsolidatedMemoryDataService consolidatedMemoryService
-        +save()
-        +consolidate()
-        +getShortTermMemory()
-        +getMidTermMemory()
-        +getLongTermMemory()
-    }
-    
+
     class GeminiLiveClient {
-        -GeminiConfig geminiConfig
-        -ObjectMapper mapper
-        +getLiveResponse()
-        -buildConfig()
+        +getLiveResponse(geminiReadySignal, sessionId, inputData, model) Flow~GeminiLiveOutput~
     }
 
     class GeminiRestClient {
-        -GeminiConfig geminiConfig
-        +getTextDialogResponse()
-        +getEmbeddingResponse()
-        +generateImageAsync()
+        +getTextDialogResponse(context, systemPrompt, userMessage, functionResponse, model) GeminiRestFunctionCall
+        +getSummaryResponse(prompt, request, model, schema) String
+        +getEmbedding(text, model) List~ContentEmbedding~
+        +getImageResponse(prompt, model) ByteArray
     }
 
     class TTSClient {
-        -AiServerConfig config
-        -AiServerWebSocketHandlerFactory handlerFactory
-        +tts()
+        +tts(voiceId, input, aiServerReadySignal) Flow~TTSOutput~
     }
-    
-    IsekAiSessionHandler --> IsekAiSessionService : uses
-    IsekAiSessionService --> GeminiLiveClient : "Router (WS)"
-    IsekAiSessionService --> GeminiRestClient : "Generator (HTTP)"
-    IsekAiSessionService --> ChatMemoryService : "RAG & Save"
-    IsekAiSessionService --> TTSClient : "Speech Gen (WS)"
-    ChatMemoryService --> GeminiRestClient : "Summarize & Embed"
+
+    class ChatMemoryService {
+        +save(hostMemberId, characterDTO, chatDTO)
+        +getShortTermMemory(characterDTO, hostMemberId) ShortTermMemoryDTO?
+        +getMidTermMemory(characterDTO, hostMemberId) String
+        +getLongTermMemory(characterDTO, hostMemberId, searchText) String
+    }
+
+    class CharacterCoordinateService {
+        +getCharacter(id) CharacterDTO?
+        +recoverVoiceIdToDefault(characterId) Result~Unit~
+    }
+
+    WebSocketTicketController --> WebSocketTicketService
+    WebSocketHandshakeInterceptor --> WebSocketTicketService
+    WebSocketConfig --> WebSocketHandshakeInterceptor
+    WebSocketConfig --> IsekAiSessionHandler
+    IsekAiSessionHandler --> IsekAiSessionService
+    IsekAiSessionService --> GeminiLiveClient
+    IsekAiSessionService --> GeminiRestClient
+    IsekAiSessionService --> TTSClient
+    IsekAiSessionService --> ChatMemoryService
+    IsekAiSessionService --> CharacterCoordinateService
 ```
 
----
+## 주요 패키지
 
-## 🚀 시작하기 (Getting Started)
+| 패키지 | 역할 |
+| --- | --- |
+| `session` | WebSocket 음성/텍스트 세션 처리 |
+| `gemini` | Gemini Live/REST 클라이언트, 함수 선언, 스키마, 응답 파서 |
+| `chat` | 채팅 저장, 단기/중기/장기 기억, pgvector RAG |
+| `character` | 캐릭터 생성, 배경 이미지 생성, 캐릭터 조회/삭제 |
+| `aiServer` | 외부 AI 서버 REST/TTS WebSocket 연동 |
+| `common/security` | OAuth2, JWT, CORS, redirect 검증 |
+| `common/websocket` | WebSocket ticket 발급과 handshake 검증 |
+| `common/s3` | S3 호환 스토리지 파일 관리 |
+| `member` | 회원 조회, OAuth 사용자 정보 매핑 |
 
-### 사전 요구사항
-*   JDK 21 이상
-*   Google AI Studio API Key
-*   Docker (PostgreSQL & Redis 실행용)
+## 실행 요구사항
 
-### 1. 프로젝트 클론
-```bash
-git clone https://github.com/rdme0/isek-ai-be.git
-cd isek-ai-be
-```
+- JDK 21
+- PostgreSQL과 pgvector 확장
+- Redis
+- Google AI Studio API Key
+- Kakao OAuth2 애플리케이션
+- 캐릭터 생성용 외부 AI 서버
+- TTS WebSocket 서버
+- S3 호환 스토리지
 
-### 2. 환경 변수 설정
-`.env` 파일을 생성하고 다음 정보를 입력하세요.
+dev 프로필은 기본적으로 다음 주소를 사용합니다.
+
+| 리소스 | 기본값 |
+| --- | --- |
+| Backend port | `18081` |
+| PostgreSQL | `jdbc:postgresql://localhost:15432/isekai` |
+| Redis | `localhost:16379` |
+
+## 환경 변수
+
+루트에 `.env` 파일을 만들고 필요한 값을 설정합니다. `spring-dotenv`가 환경 변수를 로드합니다.
+
 ```properties
 # Application
 JWT_SECRET_KEY=
 AES256_KEY=
 
-# Gemini API
+# Gemini
 GEMINI_API_KEY=
 
-# AI Servers
+# External AI servers
 AI_SERVER_WEBSOCKET_URL=
 AI_SERVER_REST_URL=
 
-# OAuth2 (Kakao Login)
+# Kakao OAuth2
 KAKAO_CLIENT_ID=
 KAKAO_CLIENT_SECRET=
 
-# Cloud Storage (SeaweedFS S3 API)
+# S3-compatible storage
 CLOUD_STORAGE_HOST=
 CLOUD_STORAGE_PUBLIC_URL=
 CLOUD_STORAGE_PORT=443
 CLOUD_STORAGE_BUCKET_NAME=
-CLOUD_STORAGE_TEMP_BUCKET_NAME=
 CLOUD_STORAGE_REGION=
-CLOUD_STORAGE_USER=
-CLOUD_STORAGE_PASSWORD=
 CLOUD_STORAGE_ACCESS_KEY=
 CLOUD_STORAGE_SECRET_KEY=
 
 # Development
 DEV_URL=
 
-# Production (Optional)
+# Production
 PROD_URL=
 PROD_POSTGRES_URL=
 PROD_POSTGRES_PORT=
@@ -417,16 +425,108 @@ PROD_REDIS_PASSWORD=
 PROD_REDIS_DATABASE=
 ```
 
+## 로컬 실행
 
-### 3. 실행
+Windows:
+
+```powershell
+.\gradlew.bat bootRun
+```
+
+macOS/Linux:
+
 ```bash
 ./gradlew bootRun
 ```
 
----
+프로필을 명시하려면 다음처럼 실행합니다.
 
-## ⚠️ 한계점 (Limitations)
-1.  **제3자 대화 구분 불가**: 현재 Gemini Live는 주변의 제3자 간 대화와 사용자가 AI에게 직접 말하는 것을 구분하지 못합니다. 따라서 제3자 대화에도 응답하거나, 반대로 응답하지 않을 수 있습니다.
-    - **하드웨어 해결책**: 지향성 마이크를 사용하여 사용자 음성만 입력받도록 구성
-    - **소프트웨어 해결책**: Gemini 3.0 Flash Native Audio 모델 출시 또는 향후 Gemini의 화자 감지(Speaker Diarization) 기능 개선을 기대
-2.  **음성 커스터마이징 미지원**: TTS 서버에서 제공하는 사전 정의된 음성만 사용 가능합니다. 캐릭터 생성 시 텍스트 프롬프트로 외형을 생성하듯이, 자연어 설명으로 음성을 커스터마이징하는 기능도 기술적으로 구현 가능합니다. 필요하다면 TTS 서버 저장소를 포크하여 직접 구현해보세요.
+```powershell
+.\gradlew.bat bootRun --args='--spring.profiles.active=dev'
+```
+
+## 검증
+
+Windows:
+
+```powershell
+.\gradlew.bat compileKotlin compileJava
+.\gradlew.bat test
+```
+
+macOS/Linux:
+
+```bash
+./gradlew compileKotlin compileJava
+./gradlew test
+```
+
+외부 서비스에 의존하는 기능은 로컬 PostgreSQL, Redis, Gemini API, AI 서버, S3 호환 스토리지 설정이 준비되어야 정상 동작합니다.
+
+## REST API 요약
+
+| Method | Path | 설명 |
+| --- | --- | --- |
+| `POST` | `/characters/live2d` | Live2D 캐릭터 생성 요청 |
+| `POST` | `/characters/background-image` | 배경 이미지 생성 |
+| `POST` | `/characters/confirm` | 캐릭터 생성 확정 |
+| `GET` | `/characters` | 공개 캐릭터 목록 조회 |
+| `GET` | `/characters/{id}` | 캐릭터 상세 조회 |
+| `DELETE` | `/characters/{id}` | 캐릭터 삭제 |
+| `GET` | `/characters/{characterId}/chats` | 캐릭터별 채팅 기록 조회 |
+| `GET` | `/me` | 현재 로그인 사용자 조회 |
+| `POST` | `/websocket/ticket` | WebSocket 접속 ticket 발급 |
+
+## WebSocket 메시지
+
+### 클라이언트 입력
+
+- Binary message: 16 kHz PCM 오디오 청크
+- Text message: `SessionTextRequest`
+
+```json
+{
+  "messageType": "TEXT_MESSAGE",
+  "content": {
+    "@type": "textMessage",
+    "text": "안녕하세요"
+  }
+}
+```
+
+### 서버 텍스트 응답 타입
+
+| 타입 | 설명 |
+| --- | --- |
+| `SERVER_READY` | Gemini Live와 TTS 서버 준비 완료 |
+| `USER_SUBTITLE_CHUNK` | 사용자 발화 STT 청크 |
+| `USER_SUBTITLE_COMPLETE` | 최종 사용자 발화 |
+| `BOT_IS_THINKING` | 답변 생성 시작 |
+| `INTERRUPTED` | 이전 답변 생성 취소 |
+| `TURN_COMPLETE` | 사용자 발화와 캐릭터 최종 텍스트 응답 |
+| `EMOTION` | 캐릭터 감정 |
+| `ERROR` | 세션 오류 |
+
+서버 Binary 응답은 TTS 오디오 청크입니다.
+
+## 설정 파일
+
+| 파일 | 역할 |
+| --- | --- |
+| `application.yml` | 공통 설정, config import, virtual thread, AI 서버 URL, 서버 포트 |
+| `application-dev.yml` | dev datasource, Redis, Kakao redirect |
+| `application-prod.yml` | prod datasource, Redis, Kakao redirect |
+| `config/application-security.yml` | OAuth2, CORS, redirect, JWT/AES |
+| `config/application-gemini.yml` | Gemini API key와 Live silence 설정 |
+| `config/application-prompt.yml` | 프롬프트 리소스 경로 |
+| `config/application-cloud-storage.yml` | S3 호환 스토리지 설정 |
+
+## 현재 한계와 주의사항
+
+- 주요 기능은 Gemini, 외부 AI 서버, TTS 서버, Redis, PostgreSQL, S3 호환 스토리지에 의존합니다.
+- dev 프로필은 `spring.jpa.hibernate.ddl-auto=create`를 사용하므로 로컬 DB 데이터가 재생성될 수 있습니다.
+- prod 프로필은 `ddl-auto=update`를 사용하며, 별도 마이그레이션 도구는 현재 설정되어 있지 않습니다.
+- WebSocket ticket은 Redis 기반 one-time ticket이므로 발급 후 60초 안에 사용해야 합니다.
+- Gemini Live는 주변 제3자 대화와 사용자가 캐릭터에게 직접 말하는 상황을 완벽히 구분하지 못할 수 있습니다.
+- TTS 음성은 외부 TTS 서버가 제공하는 voice id에 의존합니다. 존재하지 않는 voice id가 감지되면 기본 voice id로 복구를 시도합니다.
+- 일부 E2E 테스트 코드는 외부 서비스 의존성이 크며, 현재 주석 처리된 부분이 있습니다.
