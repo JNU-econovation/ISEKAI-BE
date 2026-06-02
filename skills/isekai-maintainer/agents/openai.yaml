@@ -1,0 +1,7 @@
+interface:
+  display_name: "ISEKAI Maintainer"
+  short_description: "ISEKAI-BE 백엔드 유지보수 절차를 안내합니다."
+  default_prompt: "Use $isekai-maintainer to inspect and maintain the ISEKAI-BE backend safely."
+
+policy:
+  allow_implicit_invocation: true
